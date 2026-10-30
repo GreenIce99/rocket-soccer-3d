@@ -1,0 +1,354 @@
+
+* {
+  box-sizing: border-box;
+}
+
+:root {
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
+  color: #ffffff;
+  background: #07101f;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+button {
+  font: inherit;
+}
+
+#game,
+canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+canvas {
+  position: fixed;
+  inset: 0;
+  outline: none;
+}
+
+#hud {
+  position: fixed;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.scoreboard {
+  position: absolute;
+  top: 22px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  overflow: hidden;
+  min-width: 300px;
+  border: 1px solid rgb(255 255 255 / 18%);
+  border-radius: 12px;
+  background: rgb(5 12 28 / 82%);
+  box-shadow: 0 10px 40px rgb(0 0 0 / 25%);
+  backdrop-filter: blur(12px);
+}
+
+.team {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 12px 20px;
+  font-weight: 900;
+}
+
+.team span {
+  font-size: 11px;
+  letter-spacing: 1.5px;
+}
+
+.team strong {
+  font-size: 28px;
+  line-height: 1;
+}
+
+.team.blue {
+  flex: 1;
+  background: linear-gradient(135deg, #0877ff, #0643a9);
+}
+
+.team.orange {
+  flex: 1;
+  background: linear-gradient(135deg, #d75a12, #ff8b20);
+}
+
+.clock {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 82px;
+  padding: 0 12px;
+  font-size: 22px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+
+.boost-panel {
+  position: absolute;
+  bottom: 25px;
+  right: 28px;
+  width: 210px;
+  padding: 14px;
+  border: 1px solid rgb(255 255 255 / 20%);
+  border-radius: 12px;
+  background: rgb(5 12 28 / 82%);
+  box-shadow: 0 10px 30px rgb(0 0 0 / 25%);
+  backdrop-filter: blur(10px);
+}
+
+.boost-panel > span {
+  display: block;
+  margin-bottom: 9px;
+  color: #b5c8e8;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 2px;
+}
+
+.boost-track {
+  width: 100%;
+  height: 12px;
+  overflow: hidden;
+  border-radius: 20px;
+  background: #25334b;
+}
+
+#boostFill {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #13d8ff, #5bffbf);
+  box-shadow: 0 0 16px rgb(19 216 255 / 50%);
+  transition: width 100ms linear;
+}
+
+#boostNumber {
+  display: block;
+  margin-top: 7px;
+  text-align: right;
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.help {
+  position: absolute;
+  bottom: 25px;
+  left: 25px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  border: 1px solid rgb(255 255 255 / 15%);
+  border-radius: 12px;
+  background: rgb(5 12 28 / 78%);
+  color: #d8e4fa;
+  font-size: 12px;
+  backdrop-filter: blur(10px);
+}
+
+.help b {
+  margin-bottom: 2px;
+  color: #ffffff;
+  font-size: 10px;
+  letter-spacing: 2px;
+}
+
+.help span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+kbd {
+  display: inline-block;
+  min-width: 23px;
+  padding: 3px 5px;
+  border: 1px solid #42536e;
+  border-radius: 5px;
+  background: #1a2941;
+  color: white;
+  text-align: center;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+#message {
+  position: absolute;
+  top: 24%;
+  left: 50%;
+  transform: translateX(-50%);
+  color: white;
+  text-align: center;
+  font-size: clamp(22px, 4vw, 42px);
+  font-weight: 1000;
+  letter-spacing: 4px;
+  text-shadow: 0 3px 18px rgb(0 0 0 / 75%);
+  pointer-events: none;
+}
+
+#overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: linear-gradient(
+    135deg,
+    rgb(3 9 24 / 70%),
+    rgb(5 20 45 / 50%)
+  );
+  backdrop-filter: blur(5px);
+}
+
+.menu-card {
+  width: min(100%, 470px);
+  padding: 40px 34px;
+  border: 1px solid rgb(255 255 255 / 20%);
+  border-radius: 24px;
+  background: linear-gradient(
+    145deg,
+    rgb(15 31 58 / 97%),
+    rgb(5 13 29 / 97%)
+  );
+  box-shadow: 0 30px 100px rgb(0 0 0 / 55%);
+  text-align: center;
+}
+
+.eyebrow {
+  margin-bottom: 15px;
+  color: #45d9ff;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 4px;
+}
+
+.menu-card h1 {
+  margin: 0;
+  font-size: clamp(42px, 10vw, 68px);
+  font-weight: 1000;
+  line-height: 0.9;
+  letter-spacing: -2px;
+  text-shadow: 0 6px 30px rgb(0 0 0 / 30%);
+}
+
+.menu-card h1 span {
+  color: #ff8b20;
+}
+
+.menu-card p {
+  max-width: 320px;
+  margin: 22px auto 25px;
+  color: #b7c7df;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+#playButton {
+  width: 100%;
+  padding: 16px 20px;
+  border: 0;
+  border-radius: 10px;
+  background: linear-gradient(100deg, #0877ff, #17cfff);
+  color: white;
+  font-size: 14px;
+  font-weight: 1000;
+  letter-spacing: 2px;
+  cursor: pointer;
+  box-shadow: 0 8px 25px rgb(0 140 255 / 30%);
+  transition: transform 150ms ease, filter 150ms ease;
+  pointer-events: auto;
+}
+
+#playButton:hover {
+  transform: translateY(-2px) scale(1.015);
+  filter: brightness(1.15);
+}
+
+#playButton:active {
+  transform: translateY(1px);
+}
+
+.menu-card small {
+  display: block;
+  margin-top: 18px;
+  color: #8293ad;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+@media (max-width: 600px) {
+  .scoreboard {
+    top: 12px;
+    min-width: 0;
+    width: min(94%, 350px);
+  }
+
+  .team {
+    gap: 7px;
+    padding: 10px;
+  }
+
+  .team span {
+    font-size: 9px;
+    letter-spacing: 1px;
+  }
+
+  .team strong {
+    font-size: 23px;
+  }
+
+  .clock {
+    min-width: 60px;
+    padding: 0 7px;
+    font-size: 18px;
+  }
+
+  .help {
+    bottom: 12px;
+    left: 12px;
+    gap: 6px;
+    padding: 10px;
+    font-size: 10px;
+  }
+
+  .boost-panel {
+    right: 12px;
+    bottom: 12px;
+    width: 145px;
+    padding: 10px;
+  }
+
+  #message {
+    top: 20%;
+    letter-spacing: 2px;
+  }
+
+  .menu-card {
+    padding: 30px 22px;
+  }
+}
