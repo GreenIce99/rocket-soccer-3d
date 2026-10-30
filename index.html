@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Rocket Soccer 3D</title>
+  <link rel="stylesheet" href="./src/style.css" />
+</head>
+<body>
+  <div id="hud">
+    <div class="scoreboard">
+      <div class="team blue"><span>BLUE</span><strong id="blueScore">0</strong></div>
+      <div class="clock" id="clock">3:00</div>
+      <div class="team orange"><strong id="orangeScore">0</strong><span>ORANGE</span></div>
+    </div>
+    <div class="boost-panel">
+      <span>BOOST</span>
+      <div class="boost-track"><div id="boostFill"></div></div>
+      <strong id="boostNumber">100</strong>
+    </div>
+    <div class="help">
+      <b>CONTROLS</b>
+      <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> Drive / steer</span>
+      <span><kbd>SPACE</kbd> Jump</span>
+      <span><kbd>SHIFT</kbd> Boost</span>
+      <span><kbd>R</kbd> Reset ball & car</span>
+      <span><kbd>C</kbd> Change camera</span>
+    </div>
+    <div id="message">KICKOFF!</div>
+  </div>
+  <div id="overlay">
+    <div class="menu-card">
+      <div class="eyebrow">ARCADE CAR SOCCER</div>
+      <h1>ROCKET<br><span>SOCCER</span></h1>
+      <p>A 3D car-football starter game. Drive, jump, boost, and score.</p>
+      <button id="playButton">PLAY MATCH</button>
+      <small>Prototype · Local single-player · No online multiplayer yet</small>
+    </div>
+  </div>
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
