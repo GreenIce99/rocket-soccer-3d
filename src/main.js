@@ -127,6 +127,60 @@ flame.rotation.x = -Math.PI / 2;
 flame.position.set(0, 0.85, 2.35);
 flame.visible = false;
 car.add(flame);
+// ORANGE AI OPPONENT CAR
+const opponent = new THREE.Group();
+scene.add(opponent);
+
+opponent.position.set(22, 0, 0);
+opponent.rotation.y = -Math.PI / 2;
+
+const orangePaint = material(0xff7518, 0.22, 0.5);
+const orangeGlass = material(0xffc078, 0.18, 0.5);
+
+const opponentBody = new THREE.Mesh(
+  new THREE.BoxGeometry(2.3, 0.65, 3.5),
+  orangePaint
+);
+opponentBody.position.y = 0.8;
+opponentBody.castShadow = true;
+opponent.add(opponentBody);
+
+const opponentCabin = new THREE.Mesh(
+  new THREE.BoxGeometry(1.55, 0.75, 1.65),
+  orangeGlass
+);
+opponentCabin.position.set(0, 1.4, -0.2);
+opponent.add(opponentCabin);
+
+const opponentWheels = [];
+
+for (const x of [-1.15, 1.15]) {
+  for (const z of [-1.05, 1.05]) {
+    const wheel = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.43, 0.43, 0.32, 20),
+      darkPaint
+    );
+    wheel.rotation.z = Math.PI / 2;
+    wheel.position.set(x, 0.48, z);
+    wheel.castShadow = true;
+    opponent.add(wheel);
+    opponentWheels.push(wheel);
+  }
+}
+
+const opponentFlame = new THREE.Mesh(
+  new THREE.ConeGeometry(0.38, 1.6, 16),
+  new THREE.MeshBasicMaterial({ color: 0xff8a22 })
+);
+opponentFlame.rotation.x = -Math.PI / 2;
+opponentFlame.position.set(0, 0.85, 2.35);
+opponentFlame.visible = false;
+opponent.add(opponentFlame);
+
+// AI opponent movement
+const opponentVelocity = new THREE.Vector3();
+let opponentBoost = 100;
+let opponentJump = 0;
 
 // Soccer ball
 const ball = new THREE.Mesh(
@@ -152,20 +206,27 @@ let elapsed = 0;
 
 const $ = id => document.getElementById(id);
 
+
 function resetPositions() {
+  // Reset blue player
   car.position.set(0, 0, 16);
   car.rotation.set(0, Math.PI, 0);
   carVelocity.set(0, 0, 0);
   carHeight = 0;
   jumpVelocity = 0;
+
+  // Reset orange AI opponent
+  opponent.position.set(22, 0, 0);
+  opponent.rotation.set(0, -Math.PI / 2, 0);
+  opponentVelocity.set(0, 0, 0);
+  opponentBoost = 100;
+  opponentFlame.visible = false;
+
+  // Reset soccer ball
   ball.position.set(0, 1.4, 0);
   ballVelocity.set(0, 0, 0);
 }
 
-function message(text) {
-  const el = $('message');
-  if (el) el.textContent = text;
-}
 
 $('playButton').addEventListener('click', () => {
   playing = true;
@@ -277,6 +338,138 @@ function update(dt) {
     ballVelocity.addScaledVector(delta, 7);
     if (isBoosting) ballVelocity.addScaledVector(forward, 9);
   }
+
+  // ==================================
+  // ORANGE AI OPPONENT BRAIN
+  // ==================================
+
+  // Approach the ball from the right so the AI
+  // can hit it toward the blue goal on the left.
+  const aiTarget = new THREE.Vector3(
+    ball.position.x + 3.5,
+    0,
+    ball.position.z * 0.75
+  );
+
+  // Defend the orange goal when the ball is nearby.
+  if (ball.position.x > 28) {
+    aiTarget.x = Math.min(43, ball.position.x + 2);
+    aiTarget.z = ball.position.z * 0.65;
+  }
+
+  aiTarget.x = THREE.MathUtils.clamp(aiTarget.x, -43, 43);
+  aiTarget.z = THREE.MathUtils.clamp(aiTarget.z, -25, 25);
+
+  // Calculate direction toward the target.
+  const aiDirection = aiTarget.clone().sub(opponent.position);
+  aiDirection.y = 0;
+
+  const aiDistance = aiDirection.length();
+
+  if (aiDistance > 0.1) {
+    aiDirection.normalize();
+
+    // Turn smoothly toward the target.
+    const aiDesiredYaw = Math.atan2(
+      aiDirection.x,
+      aiDirection.z
+    );
+
+    let aiTurn = aiDesiredYaw - opponent.rotation.y;
+
+    while (aiTurn > Math.PI) aiTurn -= Math.PI * 2;
+    while (aiTurn < -Math.PI) aiTurn += Math.PI * 2;
+
+    opponent.rotation.y += THREE.MathUtils.clamp(
+      aiTurn,
+      -2.8 * dt,
+      2.8 * dt
+    );
+  }
+
+  // Move the opponent forward.
+  const aiForward = new THREE.Vector3(
+    Math.sin(opponent.rotation.y),
+    0,
+    Math.cos(opponent.rotation.y)
+  );
+
+  const aiUseBoost = aiDistance > 10 && opponentBoost > 5;
+
+  const aiAcceleration = aiUseBoost ? 35 : 23;
+
+  opponentVelocity.addScaledVector(
+    aiForward,
+    aiAcceleration * dt
+  );
+
+  opponentVelocity.multiplyScalar(Math.exp(-1.15 * dt));
+
+  if (opponentVelocity.length() > 22) {
+    opponentVelocity.setLength(22);
+  }
+
+  opponent.position.addScaledVector(opponentVelocity, dt);
+
+  opponent.position.x = THREE.MathUtils.clamp(
+    opponent.position.x, -47, 47
+  );
+
+  opponent.position.z = THREE.MathUtils.clamp(
+    opponent.position.z, -27, 27
+  );
+
+  // Boost management.
+  if (aiUseBoost) {
+    opponentBoost = Math.max(0, opponentBoost - 30 * dt);
+  } else {
+    opponentBoost = Math.min(100, opponentBoost + 12 * dt);
+  }
+
+  opponentFlame.visible = aiUseBoost;
+
+  // Animate opponent wheels.
+  const aiSpeed = opponentVelocity.length();
+
+  opponentWheels.forEach(wheel => {
+    wheel.rotation.x += aiSpeed * dt * 1.8;
+  });
+
+ 
+  // Opponent hits the soccer ball.
+  const aiHitOffset = ball.position.clone().sub(
+    opponent.position.clone().add(
+      new THREE.Vector3(0, 1, 0)
+    )
+  );
+
+  const aiHitDistance = aiHitOffset.length();
+
+  if (aiHitDistance < 2.8 && aiHitDistance > 0.01) {
+    aiHitOffset.normalize();
+
+    // Push the ball away from the opponent.
+    ball.position.addScaledVector(
+      aiHitOffset,
+      2.8 - aiHitDistance
+    );
+
+    // Shoot toward the blue goal on the left.
+    ballVelocity.addScaledVector(opponentVelocity, 0.5);
+    ballVelocity.addScaledVector(aiHitOffset, 4);
+    ballVelocity.addScaledVector(
+      new THREE.Vector3(-1, 0, 0),
+      14
+    );
+
+    if (aiUseBoost) {
+      ballVelocity.addScaledVector(
+        new THREE.Vector3(-1, 0, 0),
+        5
+      );
+    }
+  }
+
 
   // Goals
   if (ball.position.x < -46 && Math.abs(ball.position.z) < 7) {
