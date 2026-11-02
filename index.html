@@ -3,40 +3,73 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#071426" />
   <title>Rocket Soccer 3D</title>
-  <link rel="stylesheet" href="./src/style.css" />
 </head>
 <body>
-  <div id="hud">
-    <div class="scoreboard">
-      <div class="team blue"><span>BLUE</span><strong id="blueScore">0</strong></div>
-      <div class="clock" id="clock">3:00</div>
-      <div class="team orange"><strong id="orangeScore">0</strong><span>ORANGE</span></div>
+  <div id="app">
+    <div id="hud">
+      <div class="brand"><span class="brand-dot"></span> ROCKET <b>SOCCER</b></div>
+      <div class="scoreboard">
+        <div class="team blue-team"><span>BLUE</span><strong id="blueScore">0</strong></div>
+        <div class="score-divider">:</div>
+        <div class="team orange-team"><strong id="orangeScore">0</strong><span>ORANGE</span></div>
+      </div>
+      <div class="top-right">
+        <div id="status">KICKOFF</div>
+        <button id="pauseBtn" class="small-button">Ⅱ</button>
+      </div>
     </div>
-    <div class="boost-panel">
-      <span>BOOST</span>
+
+    <div id="centerMessage" class="center-message">
+      <strong id="messageTitle">KICKOFF!</strong>
+      <span id="messageSub">Drive into the ball and score!</span>
+    </div>
+
+    <div id="boostPanel">
+      <div class="boost-label"><span>BOOST</span><b id="boostValue">100</b></div>
       <div class="boost-track"><div id="boostFill"></div></div>
-      <strong id="boostNumber">100</strong>
     </div>
-    <div class="help">
-      <b>CONTROLS</b>
-      <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> Drive / steer</span>
-      <span><kbd>SPACE</kbd> Jump</span>
+
+    <div id="controlsHint">
+      <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> Drive</span>
       <span><kbd>SHIFT</kbd> Boost</span>
-      <span><kbd>R</kbd> Reset ball & car</span>
-      <span><kbd>C</kbd> Change camera</span>
+      <span><kbd>SPACE</kbd> Jump</span>
+      <span><kbd>R</kbd> Reset</span>
+      <span><kbd>C</kbd> Camera</span>
     </div>
-    <div id="message">KICKOFF!</div>
-  </div>
-  <div id="overlay">
-    <div class="menu-card">
-      <div class="eyebrow">ARCADE CAR SOCCER</div>
-      <h1>ROCKET<br><span>SOCCER</span></h1>
-      <p>A 3D car-football starter game. Drive, jump, boost, and score.</p>
-      <button id="playButton">PLAY MATCH</button>
-      <small>Prototype · Local single-player · No online multiplayer yet</small>
+
+    <div id="startOverlay">
+      <div class="start-card">
+        <div class="eyebrow">ARCADE SOCCER • 3D</div>
+        <h1>ROCKET<br><span>SOCCER</span></h1>
+        <p>Take on the orange AI. Drive, boost, jump, and score!</p>
+        <button id="playBtn">PLAY MATCH <span>▶</span></button>
+        <div class="start-controls">WASD / ARROWS · SHIFT BOOST · SPACE JUMP</div>
+      </div>
+    </div>
+
+    <div id="pauseOverlay" class="hidden">
+      <div class="pause-card">
+        <h2>PAUSED</h2>
+        <p>Take a breather. The match is waiting.</p>
+        <button id="resumeBtn">RESUME</button>
+      </div>
+    </div>
+
+    <div id="mobileControls">
+      <div class="dpad">
+        <button data-key="KeyW" class="up">▲</button>
+        <button data-key="KeyA" class="left">◀</button>
+        <button data-key="KeyS" class="down">▼</button>
+        <button data-key="KeyD" class="right">▶</button>
+      </div>
+      <div class="mobile-actions">
+        <button data-key="Space" class="jump">JUMP</button>
+        <button data-key="ShiftLeft" class="boost">BOOST</button>
+      </div>
     </div>
   </div>
-  <script type="module" src="./src/main.js"></script>
+  <script type="module" src="/src/main.js"></script>
 </body>
 </html>
