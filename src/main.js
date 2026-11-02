@@ -1,526 +1,257 @@
-
 import * as THREE from 'three';
+import './style.css';
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x071426);
-scene.fog = new THREE.Fog(0x071426, 65, 150);
+scene.background = new THREE.Color(0x8bb7d2);
+scene.fog = new THREE.Fog(0x8bb7d2, 90, 190);
 
-const camera = new THREE.PerspectiveCamera(
-  65, window.innerWidth / window.innerHeight, 0.1, 250
-);
-
+const camera = new THREE.PerspectiveCamera(62, innerWidth / innerHeight, 0.1, 400);
+camera.position.set(0, 13, 24);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.25;
-document.body.prepend(renderer.domElement);
+renderer.toneMappingExposure = 1.15;
+document.querySelector('#app').prepend(renderer.domElement);
 
-scene.add(new THREE.HemisphereLight(0x9bdcff, 0x17351e, 2));
-
-const sun = new THREE.DirectionalLight(0xffffff, 3);
-sun.position.set(-15, 35, 20);
+scene.add(new THREE.HemisphereLight(0xdaf0ff, 0x315044, 2.0));
+const sun = new THREE.DirectionalLight(0xffffff, 2.1);
+sun.position.set(-25, 45, 25);
 sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.camera.left = -60; sun.shadow.camera.right = 60;
+sun.shadow.camera.top = 45; sun.shadow.camera.bottom = -45;
 scene.add(sun);
 
-function material(color, roughness = 0.6, metalness = 0) {
-  return new THREE.MeshStandardMaterial({ color, roughness, metalness });
+const mat = (color, roughness = .7, metalness = 0) => new THREE.MeshStandardMaterial({ color, roughness, metalness });
+const grassMat = mat(0x25834b);
+const lineMat = new THREE.MeshBasicMaterial({ color: 0xe8fff0 });
+const wallMat = mat(0x243e58, .55, .25);
+
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(90, 58), grassMat);
+ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
+
+for (let i = 0; i < 9; i++) {
+  const stripe = new THREE.Mesh(new THREE.PlaneGeometry(10, 58), mat(i % 2 ? 0x238049 : 0x2a8b50));
+  stripe.rotation.x = -Math.PI / 2; stripe.position.set(-40 + i * 10, .012, 0); stripe.receiveShadow = true; scene.add(stripe);
 }
-
-function cube(w, h, d, color, x, y, z, parent = scene, metalness = 0) {
-  const mesh = new THREE.Mesh(
-    new THREE.BoxGeometry(w, h, d),
-    material(color, 0.4, metalness)
-  );
-  mesh.position.set(x, y, z);
-  mesh.castShadow = true;
-  mesh.receiveShadow = true;
-  parent.add(mesh);
-  return mesh;
+function line(x1,z1,x2,z2,width=.16) {
+  const dx=x2-x1, dz=z2-z1, len=Math.hypot(dx,dz);
+  const m=new THREE.Mesh(new THREE.BoxGeometry(len,.035,width),lineMat);
+  m.position.set((x1+x2)/2,.04,(z1+z2)/2); m.rotation.y=-Math.atan2(dz,dx); scene.add(m);
 }
+line(-43,-27,43,-27); line(-43,27,43,27); line(-43,-27,-43,27); line(43,-27,43,27);
+line(0,-27,0,27,.12);
+const circle = new THREE.Mesh(new THREE.RingGeometry(7.85,8,.16,96), lineMat);
+circle.rotation.x=-Math.PI/2; circle.position.y=.05; scene.add(circle);
+const spot = new THREE.Mesh(new THREE.CircleGeometry(.35,24),lineMat);
+spot.rotation.x=-Math.PI/2; spot.position.y=.05; scene.add(spot);
 
-const floor = new THREE.Mesh(
-  new THREE.PlaneGeometry(150, 100),
-  material(0x176b45)
-);
-floor.rotation.x = -Math.PI / 2;
-floor.position.y = -0.12;
-floor.receiveShadow = true;
-scene.add(floor);
-
-// Arena
-cube(100, 1, 2, 0x172b45, 0, 0, -30);
-cube(100, 1, 2, 0x172b45, 0, 0, 30);
-cube(2, 1, 60, 0x172b45, -50, 0, 0);
-cube(2, 1, 60, 0x172b45, 50, 0, 0);
-
-// Glowing-looking field markings
-function line(x, z, w, d, color = 0xffffff) {
-  const mesh = new THREE.Mesh(
-    new THREE.BoxGeometry(w, 0.035, d),
-    new THREE.MeshBasicMaterial({ color })
-  );
-  mesh.position.set(x, -0.045, z);
-  scene.add(mesh);
+function makeGoal(x, color, facing) {
+  const group=new THREE.Group(); group.position.set(x,0,0);
+  const frameMat=mat(color,.35,.45);
+  const postGeo=new THREE.BoxGeometry(.65,6,.65);
+  for (const z of [-7,7]) { const p=new THREE.Mesh(postGeo,frameMat); p.position.set(0,3,z); p.castShadow=true; group.add(p); }
+  const bar=new THREE.Mesh(new THREE.BoxGeometry(.65,.65,14),frameMat); bar.position.y=6; bar.castShadow=true; group.add(bar);
+  const net=new THREE.Mesh(new THREE.BoxGeometry(5,5.6,13.2),new THREE.MeshBasicMaterial({color,transparent:true,opacity:.10,side:THREE.DoubleSide}));
+  net.position.x=facing*2.3; net.position.y=2.8; group.add(net);
+  scene.add(group);
 }
+makeGoal(-43,0x42baff,-1); makeGoal(43,0xff9b3d,1);
 
-line(0, 0, 0.12, 60);
-const circle = new THREE.Mesh(
-  new THREE.RingGeometry(7.9, 8.05, 64),
-  new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide })
-);
-circle.rotation.x = -Math.PI / 2;
-circle.position.y = -0.04;
-scene.add(circle);
-
-for (const x of [-38, 38]) {
-  const goalColor = x < 0 ? 0x168bff : 0xff812c;
-  cube(1, 5, 16, goalColor, x, 2.5, 0, scene, 0.3);
-  cube(12, 1, 1, goalColor, x < 0 ? -44 : 44, 5, 0);
-  cube(1, 5, 16, goalColor, x < 0 ? -44 : 44, 2.5, 0);
+function createCar(color, accent) {
+  const group=new THREE.Group();
+  const body=new THREE.Mesh(new THREE.BoxGeometry(3.2,1.05,2.05),mat(color,.32,.35));
+  body.position.y=.95; body.castShadow=true; group.add(body);
+  const hood=new THREE.Mesh(new THREE.BoxGeometry(1.1,.35,1.9),mat(accent,.3,.25));
+  hood.position.set(1.0,1.42,0); hood.castShadow=true; group.add(hood);
+  const cabin=new THREE.Mesh(new THREE.BoxGeometry(1.35,.8,1.65),mat(0x14283b,.25,.25));
+  cabin.position.set(-.35,1.7,0); cabin.castShadow=true; group.add(cabin);
+  const glass=new THREE.Mesh(new THREE.BoxGeometry(.08,.55,1.45),mat(0x77c9ed,.18,.2));
+  glass.position.set(.34,1.75,0); group.add(glass);
+  const wheels=[];
+  for (const x of [-1,1]) for (const z of [-1,1]) {
+    const w=new THREE.Mesh(new THREE.CylinderGeometry(.48,.48,.32,16),mat(0x111820,.9));
+    w.rotation.x=Math.PI/2; w.position.set(x,.55,z); w.castShadow=true; group.add(w); wheels.push(w);
+    const hub=new THREE.Mesh(new THREE.CylinderGeometry(.2,.2,.34,12),mat(accent,.3,.5));
+    hub.rotation.x=Math.PI/2; hub.position.copy(w.position); group.add(hub);
+  }
+  const nose=new THREE.Mesh(new THREE.BoxGeometry(.16,.18,1.75),mat(accent,.3,.4));
+  nose.position.set(1.63,1.05,0); group.add(nose);
+  const flame=new THREE.Mesh(new THREE.ConeGeometry(.42,1.5,12),new THREE.MeshBasicMaterial({color:0x54dfff}));
+  flame.rotation.z=-Math.PI/2; flame.position.set(-2.05,.9,0); flame.visible=false; group.add(flame);
+  group.userData={wheels,flame};
+  scene.add(group); return group;
 }
+const player=createCar(0x168fe0,0x70d7ff);
+const opponent=createCar(0xe87922,0xffc16b);
+player.position.set(-10,0,10); opponent.position.set(20,0,-8);
 
-// Build the player's car
-const car = new THREE.Group();
-scene.add(car);
+const ball=new THREE.Mesh(new THREE.SphereGeometry(1.25,32,24),mat(0xf5f7fa,.28,.12));
+ball.position.set(0,1.3,0); ball.castShadow=true; scene.add(ball);
+const ballEdges=new THREE.Mesh(new THREE.SphereGeometry(1.27,16,12),new THREE.MeshBasicMaterial({color:0x28384a,wireframe:true,transparent:true,opacity:.17}));
+ball.add(ballEdges);
 
-const bluePaint = material(0x168bff, 0.25, 0.45);
-const darkPaint = material(0x101a2c, 0.35, 0.3);
-
-const body = new THREE.Mesh(
-  new THREE.BoxGeometry(2.3, 0.65, 3.5), bluePaint
-);
-body.position.y = 0.8;
-body.castShadow = true;
-car.add(body);
-
-const cabin = new THREE.Mesh(
-  new THREE.BoxGeometry(1.55, 0.75, 1.65),
-  material(0x7ddcff, 0.2, 0.4)
-);
-cabin.position.set(0, 1.4, -0.2);
-cabin.castShadow = true;
-car.add(cabin);
-
-const wheels = [];
-for (const x of [-1.15, 1.15]) {
-  for (const z of [-1.05, 1.05]) {
-    const wheel = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.43, 0.43, 0.32, 20),
-      darkPaint
-    );
-    wheel.rotation.z = Math.PI / 2;
-    wheel.position.set(x, 0.48, z);
-    wheel.castShadow = true;
-    car.add(wheel);
-    wheels.push(wheel);
-  }
+const keys=new Set();
+let started=false, paused=false, cameraMode=0, blueScore=0, orangeScore=0;
+let playerSpeed=0, playerVertical=0, playerY=0, playerYaw=0, playerBoost=100;
+let aiSpeed=0, aiYaw=Math.PI, ballVel=new THREE.Vector3(), lastTime=0, messageTimer=0;
+const $=s=>document.querySelector(s);
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const lerp=(a,b,t)=>a+(b-a)*t;
+function showMessage(title,sub,duration=1.8){
+  $('#messageTitle').textContent=title; $('#messageSub').textContent=sub;
+  $('#centerMessage').classList.add('show'); messageTimer=duration;
 }
-
-const flame = new THREE.Mesh(
-  new THREE.ConeGeometry(0.38, 1.6, 16),
-  new THREE.MeshBasicMaterial({ color: 0x31eaff })
-);
-flame.rotation.x = -Math.PI / 2;
-flame.position.set(0, 0.85, 2.35);
-flame.visible = false;
-car.add(flame);
-// ORANGE AI OPPONENT CAR
-const opponent = new THREE.Group();
-scene.add(opponent);
-
-opponent.position.set(22, 0, 0);
-opponent.rotation.y = -Math.PI / 2;
-
-const orangePaint = material(0xff7518, 0.22, 0.5);
-const orangeGlass = material(0xffc078, 0.18, 0.5);
-
-const opponentBody = new THREE.Mesh(
-  new THREE.BoxGeometry(2.3, 0.65, 3.5),
-  orangePaint
-);
-opponentBody.position.y = 0.8;
-opponentBody.castShadow = true;
-opponent.add(opponentBody);
-
-const opponentCabin = new THREE.Mesh(
-  new THREE.BoxGeometry(1.55, 0.75, 1.65),
-  orangeGlass
-);
-opponentCabin.position.set(0, 1.4, -0.2);
-opponent.add(opponentCabin);
-
-const opponentWheels = [];
-
-for (const x of [-1.15, 1.15]) {
-  for (const z of [-1.05, 1.05]) {
-    const wheel = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.43, 0.43, 0.32, 20),
-      darkPaint
-    );
-    wheel.rotation.z = Math.PI / 2;
-    wheel.position.set(x, 0.48, z);
-    wheel.castShadow = true;
-    opponent.add(wheel);
-    opponentWheels.push(wheel);
-  }
+function resetPositions(){
+  player.position.set(-10,0,10); playerYaw=0; playerSpeed=0; playerY=0; playerVertical=0;
+  opponent.position.set(20,0,-8); aiYaw=Math.PI; aiSpeed=0;
+  ball.position.set(0,1.3,0); ballVel.set(0,0,0); playerBoost=100;
 }
-
-const opponentFlame = new THREE.Mesh(
-  new THREE.ConeGeometry(0.38, 1.6, 16),
-  new THREE.MeshBasicMaterial({ color: 0xff8a22 })
-);
-opponentFlame.rotation.x = -Math.PI / 2;
-opponentFlame.position.set(0, 0.85, 2.35);
-opponentFlame.visible = false;
-opponent.add(opponentFlame);
-
-// AI opponent movement
-const opponentVelocity = new THREE.Vector3();
-let opponentBoost = 100;
-let opponentJump = 0;
-
-// Soccer ball
-const ball = new THREE.Mesh(
-  new THREE.SphereGeometry(1.35, 32, 24),
-  material(0xf4f7ff, 0.3)
-);
-ball.position.set(0, 1.4, 0);
-ball.castShadow = true;
-scene.add(ball);
-
-const ballVelocity = new THREE.Vector3();
-const carVelocity = new THREE.Vector3();
-const keys = {};
-let boost = 100;
-let blueScore = 0;
-let orangeScore = 0;
-let timeLeft = 180;
-let playing = false;
-let cameraMode = 0;
-let carHeight = 0;
-let jumpVelocity = 0;
-let elapsed = 0;
-
-const $ = id => document.getElementById(id);
-
-
-function resetPositions() {
-  // Reset blue player
-  car.position.set(0, 0, 16);
-  car.rotation.set(0, Math.PI, 0);
-  carVelocity.set(0, 0, 0);
-  carHeight = 0;
-  jumpVelocity = 0;
-
-  // Reset orange AI opponent
-  opponent.position.set(22, 0, 0);
-  opponent.rotation.set(0, -Math.PI / 2, 0);
-  opponentVelocity.set(0, 0, 0);
-  opponentBoost = 100;
-  opponentFlame.visible = false;
-
-  // Reset soccer ball
-  ball.position.set(0, 1.4, 0);
-  ballVelocity.set(0, 0, 0);
-}
-
-
-$('playButton').addEventListener('click', () => {
-  playing = true;
-  $('overlay').style.display = 'none';
-  resetPositions();
-  message('KICKOFF!');
-});
-
-window.addEventListener('keydown', e => {
-  keys[e.code] = true;
-  if (['Space', 'ArrowUp', 'ArrowDown'].includes(e.code)) e.preventDefault();
-
-  if (e.code === 'KeyR') resetPositions();
-  if (e.code === 'KeyC') cameraMode = (cameraMode + 1) % 2;
-  if (e.code === 'Space' && playing && carHeight < 0.05) {
-    jumpVelocity = 8.5;
-  }
-});
-
-window.addEventListener('keyup', e => keys[e.code] = false);
-
-function update(dt) {
-  if (!playing) return;
-
-  elapsed += dt;
-  timeLeft -= dt;
-  if (timeLeft <= 0) {
-    timeLeft = 0;
-    playing = false;
-    $('overlay').style.display = 'grid';
-    $('playButton').textContent = 'PLAY AGAIN';
-    message('FULL TIME!');
-  }
-
-  const forward = new THREE.Vector3(
-    Math.sin(car.rotation.y), 0, Math.cos(car.rotation.y)
-  );
-
-  const accelerating = keys.KeyW || keys.ArrowUp;
-  const reversing = keys.KeyS || keys.ArrowDown;
-  const steering = (keys.KeyA || keys.ArrowLeft ? 1 : 0)
-                 - (keys.KeyD || keys.ArrowRight ? 1 : 0);
-  const boosting = keys.ShiftLeft || keys.ShiftRight;
-
-  if (accelerating) carVelocity.addScaledVector(forward, 22 * dt);
-  if (reversing) carVelocity.addScaledVector(forward, -13 * dt);
-
-  const speed = carVelocity.length();
-  if (speed > 0.5) car.rotation.y += steering * dt * 2.1
-    * Math.min(speed / 8, 1) * (accelerating ? 1 : -1);
-
-  const isBoosting = boosting && boost > 0 && accelerating;
-  if (isBoosting) {
-    carVelocity.addScaledVector(forward, 38 * dt);
-    boost = Math.max(0, boost - 30 * dt);
-  } else {
-    boost = Math.min(100, boost + 10 * dt);
-  }
-
-  flame.visible = isBoosting;
-  carVelocity.multiplyScalar(Math.exp(-1.4 * dt));
-  if (carVelocity.length() > 27) carVelocity.setLength(27);
-  car.position.addScaledVector(carVelocity, dt);
-
-  car.position.x = THREE.MathUtils.clamp(car.position.x, -47, 47);
-  car.position.z = THREE.MathUtils.clamp(car.position.z, -27, 27);
-
-  jumpVelocity -= 22 * dt;
-  carHeight += jumpVelocity * dt;
-  if (carHeight < 0) {
-    carHeight = 0;
-    jumpVelocity = 0;
-  }
-  car.position.y = carHeight;
-
-  wheels.forEach(w => {
-    w.rotation.x += speed * dt * 1.8;
-  });
-
-  // Ball movement and bounce
-  ballVelocity.y -= 12 * dt;
-  ball.position.addScaledVector(ballVelocity, dt);
-  ballVelocity.multiplyScalar(Math.exp(-0.38 * dt));
-
-  if (ball.position.y < 1.35) {
-    ball.position.y = 1.35;
-    ballVelocity.y = Math.abs(ballVelocity.y) * 0.65;
-    if (Math.abs(ballVelocity.y) < 0.7) ballVelocity.y = 0;
-  }
-
-  if (Math.abs(ball.position.x) > 48) {
-    ball.position.x = Math.sign(ball.position.x) * 48;
-    ballVelocity.x *= -0.7;
-  }
-  if (Math.abs(ball.position.z) > 28) {
-    ball.position.z = Math.sign(ball.position.z) * 28;
-    ballVelocity.z *= -0.7;
-  }
-
-  // Car hits the ball
-  const delta = ball.position.clone().sub(
-    car.position.clone().add(new THREE.Vector3(0, 1, 0))
-  );
-  const distance = delta.length();
-  if (distance < 2.8 && distance > 0.01) {
-    delta.normalize();
-    ball.position.addScaledVector(delta, 2.8 - distance);
-    ballVelocity.addScaledVector(carVelocity, 0.8);
-    ballVelocity.addScaledVector(delta, 7);
-    if (isBoosting) ballVelocity.addScaledVector(forward, 9);
-  }
-
-  // ==================================
-  // ORANGE AI OPPONENT BRAIN
-  // ==================================
-
-  // Approach the ball from the right so the AI
-  // can hit it toward the blue goal on the left.
-  const aiTarget = new THREE.Vector3(
-    ball.position.x + 3.5,
-    0,
-    ball.position.z * 0.75
-  );
-
-  // Defend the orange goal when the ball is nearby.
-  if (ball.position.x > 28) {
-    aiTarget.x = Math.min(43, ball.position.x + 2);
-    aiTarget.z = ball.position.z * 0.65;
-  }
-
-  aiTarget.x = THREE.MathUtils.clamp(aiTarget.x, -43, 43);
-  aiTarget.z = THREE.MathUtils.clamp(aiTarget.z, -25, 25);
-
-  // Calculate direction toward the target.
-  const aiDirection = aiTarget.clone().sub(opponent.position);
-  aiDirection.y = 0;
-
-  const aiDistance = aiDirection.length();
-
-  if (aiDistance > 0.1) {
-    aiDirection.normalize();
-
-    // Turn smoothly toward the target.
-    const aiDesiredYaw = Math.atan2(
-      aiDirection.x,
-      aiDirection.z
-    );
-
-    let aiTurn = aiDesiredYaw - opponent.rotation.y;
-
-    while (aiTurn > Math.PI) aiTurn -= Math.PI * 2;
-    while (aiTurn < -Math.PI) aiTurn += Math.PI * 2;
-
-    opponent.rotation.y += THREE.MathUtils.clamp(
-      aiTurn,
-      -2.8 * dt,
-      2.8 * dt
-    );
-  }
-
-  // Move the opponent forward.
-  const aiForward = new THREE.Vector3(
-    Math.sin(opponent.rotation.y),
-    0,
-    Math.cos(opponent.rotation.y)
-  );
-
-  const aiUseBoost = aiDistance > 10 && opponentBoost > 5;
-
-  const aiAcceleration = aiUseBoost ? 35 : 23;
-
-  opponentVelocity.addScaledVector(
-    aiForward,
-    aiAcceleration * dt
-  );
-
-  opponentVelocity.multiplyScalar(Math.exp(-1.15 * dt));
-
-  if (opponentVelocity.length() > 22) {
-    opponentVelocity.setLength(22);
-  }
-
-  opponent.position.addScaledVector(opponentVelocity, dt);
-
-  opponent.position.x = THREE.MathUtils.clamp(
-    opponent.position.x, -47, 47
-  );
-
-  opponent.position.z = THREE.MathUtils.clamp(
-    opponent.position.z, -27, 27
-  );
-
-  // Boost management.
-  if (aiUseBoost) {
-    opponentBoost = Math.max(0, opponentBoost - 30 * dt);
-  } else {
-    opponentBoost = Math.min(100, opponentBoost + 12 * dt);
-  }
-
-  opponentFlame.visible = aiUseBoost;
-
-  // Animate opponent wheels.
-  const aiSpeed = opponentVelocity.length();
-
-  opponentWheels.forEach(wheel => {
-    wheel.rotation.x += aiSpeed * dt * 1.8;
-  });
-
- 
-  // Opponent hits the soccer ball.
-  const aiHitOffset = ball.position.clone().sub(
-    opponent.position.clone().add(
-      new THREE.Vector3(0, 1, 0)
-    )
-  );
-
-  const aiHitDistance = aiHitOffset.length();
-
-  if (aiHitDistance < 2.8 && aiHitDistance > 0.01) {
-    aiHitOffset.normalize();
-
-    // Push the ball away from the opponent.
-    ball.position.addScaledVector(
-      aiHitOffset,
-      2.8 - aiHitDistance
-    );
-
-    // Shoot toward the blue goal on the left.
-    ballVelocity.addScaledVector(opponentVelocity, 0.5);
-    ballVelocity.addScaledVector(aiHitOffset, 4);
-    ballVelocity.addScaledVector(
-      new THREE.Vector3(-1, 0, 0),
-      14
-    );
-
-    if (aiUseBoost) {
-      ballVelocity.addScaledVector(
-        new THREE.Vector3(-1, 0, 0),
-        5
-      );
-    }
-  }
-
-
-  // Goals
-  if (ball.position.x < -46 && Math.abs(ball.position.z) < 7) {
-    blueScore++;
-    scoreGoal('BLUE SCORES!');
-  } else if (ball.position.x > 46 && Math.abs(ball.position.z) < 7) {
-    orangeScore++;
-    scoreGoal('ORANGE SCORES!');
-  }
-
-  $('blueScore').textContent = blueScore;
-  $('orangeScore').textContent = orangeScore;
-  $('clock').textContent =
-    `${Math.floor(timeLeft / 60)}:${String(Math.floor(timeLeft % 60)).padStart(2, '0')}`;
-  $('boostFill').style.width = `${boost}%`;
-  $('boostNumber').textContent = Math.round(boost);
-}
-
-function scoreGoal(text) {
-  message(text);
+function score(team){
+  if(team==='blue'){blueScore++;$('#blueScore').textContent=blueScore;}
+  else {orangeScore++;$('#orangeScore').textContent=orangeScore;}
+  showMessage(team==='blue'?'BLUE SCORES!':'ORANGE SCORES!', 'Get ready for the kickoff!', 2.2);
   resetPositions();
 }
+function addKey(code,down){ if(down) keys.add(code); else keys.delete(code); }
+addEventListener('keydown',e=>{
+  if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code)) e.preventDefault();
+  addKey(e.code,true);
+  if(e.repeat)return;
+  if(e.code==='KeyR'&&started&&!paused){resetPositions();showMessage('RESET','Back to kickoff',1);}
+  if(e.code==='KeyC'){cameraMode=(cameraMode+1)%2;}
+  if(e.code==='Escape') togglePause();
+});
+addEventListener('keyup',e=>addKey(e.code,false));
+document.querySelectorAll('#mobileControls button').forEach(btn=>{
+  const code=btn.dataset.key;
+  btn.addEventListener('pointerdown',e=>{e.preventDefault();btn.setPointerCapture(e.pointerId);addKey(code,true);});
+  const release=e=>{e.preventDefault();addKey(code,false);};
+  btn.addEventListener('pointerup',release); btn.addEventListener('pointercancel',release); btn.addEventListener('lostpointercapture',release);
+});
+function togglePause(){
+  if(!started)return;
+  paused=!paused; $('#pauseOverlay').classList.toggle('hidden',!paused);
+  $('#status').textContent=paused?'PAUSED':'LIVE';
+}
+$('#pauseBtn').addEventListener('click',togglePause);
+$('#resumeBtn').addEventListener('click',togglePause);
+$('#playBtn').addEventListener('click',()=>{started=true;$('#startOverlay').classList.add('hidden');showMessage('KICKOFF!','WASD to drive • SHIFT to boost',1.7);});
 
-function animate() {
+const clock=new THREE.Clock();
+function updatePlayer(dt){
+  const forward=keys.has('KeyW')||keys.has('ArrowUp');
+  const reverse=keys.has('KeyS')||keys.has('ArrowDown');
+  const left=keys.has('KeyA')||keys.has('ArrowLeft');
+  const right=keys.has('KeyD')||keys.has('ArrowRight');
+  const boosting=(keys.has('ShiftLeft')||keys.has('ShiftRight'))&&playerBoost>0&&forward;
+  const maxSpeed=boosting?31:19;
+  if(forward) playerSpeed+=26*dt;
+  if(reverse) playerSpeed-=31*dt;
+  if(!forward&&!reverse) playerSpeed*=Math.pow(.91,dt*60);
+  playerSpeed=clamp(playerSpeed,-9,maxSpeed);
+  if(boosting) playerBoost=Math.max(0,playerBoost-32*dt);
+  else playerBoost=Math.min(100,playerBoost+13*dt);
+  const steer=(right?1:0)-(left?1:0);
+  if(Math.abs(playerSpeed)>.4) playerYaw+=steer*2.35*dt*(playerSpeed>=0?1:-1)*clamp(Math.abs(playerSpeed)/5,.25,1);
+  playerY+=playerVertical*dt; playerVertical-=23*dt;
+  if(playerY<0){playerY=0;playerVertical=0;}
+  if(keys.has('Space')&&playerY===0) playerVertical=9.5;
+  const dir=new THREE.Vector3(Math.cos(playerYaw),0,-Math.sin(playerYaw));
+  player.position.addScaledVector(dir,playerSpeed*dt);
+  player.position.x=clamp(player.position.x,-39,39); player.position.z=clamp(player.position.z,-24,24);
+  player.position.y=playerY; player.rotation.y=-playerYaw;
+  player.userData.flame.visible=boosting;
+  player.userData.flame.scale.setScalar(boosting?(.8+Math.random()*.35):0);
+  player.userData.wheels.forEach(w=>w.rotation.z-=playerSpeed*dt*1.7);
+}
+function updateAI(dt){
+  const toBall=new THREE.Vector3(ball.position.x-opponent.position.x,0,ball.position.z-opponent.position.z);
+  let target=new THREE.Vector3(ball.position.x+3.3,0,ball.position.z);
+  // Move behind the ball and aim toward the blue goal.
+  const goalDir=new THREE.Vector3(-1,0,0);
+  target.addScaledVector(goalDir,-2.6);
+  if(ball.position.x>30) target.set(32,0,ball.position.z*.65);
+  target.x=clamp(target.x,-36,37); target.z=clamp(target.z,-22,22);
+  const desired=Math.atan2(-toBall.z,-toBall.x);
+  let diff=Math.atan2(Math.sin(desired-aiYaw),Math.cos(desired-aiYaw));
+  aiYaw+=clamp(diff,-2.5*dt,2.5*dt);
+  const distance=toBall.length();
+  const accelerating=distance>2.1;
+  const boosting=distance>12&&aiSpeed<17;
+  if(accelerating) aiSpeed+= (boosting?25:17)*dt;
+  else aiSpeed*=Math.pow(.86,dt*60);
+  aiSpeed=clamp(aiSpeed,0,boosting?23:15);
+  const dir=new THREE.Vector3(Math.cos(aiYaw),0,-Math.sin(aiYaw));
+  opponent.position.addScaledVector(dir,aiSpeed*dt);
+  opponent.position.x=clamp(opponent.position.x,-39,39); opponent.position.z=clamp(opponent.position.z,-24,24);
+  opponent.rotation.y=-aiYaw;
+  opponent.userData.flame.visible=boosting;
+  opponent.userData.flame.scale.setScalar(boosting?1:0);
+  opponent.userData.wheels.forEach(w=>w.rotation.z-=aiSpeed*dt*1.7);
+}
+function carBallCollision(car,carYaw,power){
+  const carCenter=new THREE.Vector3(car.position.x,car.position.y+1.05,car.position.z);
+  const delta=ball.position.clone().sub(carCenter);
+  const dist=delta.length();
+  if(dist<2.55&&dist>.001){
+    const normal=delta.normalize();
+    ball.position.copy(carCenter).addScaledVector(normal,2.56);
+    const impulse=Math.max(power,7);
+    ballVel.addScaledVector(normal,impulse);
+    ballVel.x+=Math.cos(carYaw)*power*.48;
+    ballVel.z-=Math.sin(carYaw)*power*.48;
+    ballVel.y=Math.max(ballVel.y,2.3);
+  }
+}
+function updateBall(dt){
+  ballVel.y-=12*dt;
+  ball.position.addScaledVector(ballVel,dt);
+  if(ball.position.y<1.25){ball.position.y=1.25;ballVel.y=Math.abs(ballVel.y)*.58;if(Math.abs(ballVel.y)<1.1)ballVel.y=0;}
+  if(Math.abs(ball.position.z)>26){ball.position.z=Math.sign(ball.position.z)*26;ballVel.z*=-.72;}
+  // Side walls and goal-mouth openings.
+  if(ball.position.x<-43.8||ball.position.x>43.8){
+    const inGoal=Math.abs(ball.position.z)<7&&ball.position.y<6.1;
+    if(inGoal){score(ball.position.x<0?'orange':'blue');return;}
+    ball.position.x=clamp(ball.position.x,-43.8,43.8);ballVel.x*=-.72;
+  }
+  ballVel.multiplyScalar(Math.pow(.992,dt*60));
+  ball.rotation.x+=ballVel.z*dt*.6; ball.rotation.z-=ballVel.x*dt*.6;
+  carBallCollision(player,playerYaw,Math.abs(playerSpeed)*.62);
+  carBallCollision(opponent,aiYaw,Math.abs(aiSpeed)*.7);
+  ballVel.x=clamp(ballVel.x,-34,34);ballVel.z=clamp(ballVel.z,-28,28);ballVel.y=clamp(ballVel.y,-18,18);
+}
+function updateCamera(dt){
+  const forward=new THREE.Vector3(Math.cos(playerYaw),0,-Math.sin(playerYaw));
+  let desiredPos,look;
+  if(cameraMode===0){
+    desiredPos=player.position.clone().addScaledVector(forward,-15).add(new THREE.Vector3(0,8,0));
+    look=player.position.clone().addScaledVector(forward,8).add(new THREE.Vector3(0,1,0));
+  } else {
+    desiredPos=new THREE.Vector3(0,48,0.01);look=new THREE.Vector3(0,0,0);
+  }
+  camera.position.lerp(desiredPos,1-Math.pow(.001,dt));
+  const target=new THREE.Vector3();camera.getWorldDirection(target);
+  camera.lookAt(look);
+}
+function animate(){
   requestAnimationFrame(animate);
-  const dt = Math.min(clock.getDelta(), 0.035);
-  update(dt);
-
-  const forward = new THREE.Vector3(
-    Math.sin(car.rotation.y), 0, Math.cos(car.rotation.y)
-  );
-
-  if (cameraMode === 0) {
-    const target = car.position.clone().addScaledVector(forward, -10);
-    target.y += 6;
-    camera.position.lerp(target, 0.08);
-    camera.lookAt(car.position.x, car.position.y + 1, car.position.z);
-  } else {
-    camera.position.lerp(new THREE.Vector3(0, 48, 0.1), 0.04);
-    camera.lookAt(0, 0, 0);
-  }
-
-  renderer.render(scene, camera);
+  const dt=Math.min(clock.getDelta(),.033);
+  if(started&&!paused){
+    updatePlayer(dt);updateAI(dt);updateBall(dt);updateCamera(dt);
+    if(messageTimer>0){messageTimer-=dt;if(messageTimer<=0)$('#centerMessage').classList.remove('show');}
+  } else if(!started){camera.position.lerp(new THREE.Vector3(0,33,48),.015);camera.lookAt(0,0,0);}
+  $('#boostValue').textContent=Math.round(playerBoost);
+  $('#boostFill').style.width=playerBoost+'%';
+  renderer.render(scene,camera);
 }
-
-const clock = new THREE.Clock();
-camera.position.set(0, 8, 28);
 animate();
 
-window.addEventListener('resize', () => {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
+addEventListener('resize',()=>{
+  camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
 });
