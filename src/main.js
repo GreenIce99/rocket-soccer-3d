@@ -164,35 +164,61 @@ function updatePlayer(dt){
   const dir=new THREE.Vector3(Math.cos(playerYaw),0,-Math.sin(playerYaw));
   player.position.addScaledVector(dir,playerSpeed*dt);
   player.position.x=clamp(player.position.x,-39,39); player.position.z=clamp(player.position.z,-24,24);
-  player.position.y=playerY; player.rotation.y=-playerYaw;
+  player.position.y=playerY; player.rotation.y=playerYaw;
   player.userData.flame.visible=boosting;
   player.userData.flame.scale.setScalar(boosting?(.8+Math.random()*.35):0);
   player.userData.wheels.forEach(w=>w.rotation.z-=playerSpeed*dt*1.7);
 }
 function updateAI(dt){
-  const toBall=new THREE.Vector3(ball.position.x-opponent.position.x,0,ball.position.z-opponent.position.z);
-  let target=new THREE.Vector3(ball.position.x+3.3,0,ball.position.z);
-  // Move behind the ball and aim toward the blue goal.
-  const goalDir=new THREE.Vector3(-1,0,0);
-  target.addScaledVector(goalDir,-2.6);
-  if(ball.position.x>30) target.set(32,0,ball.position.z*.65);
-  target.x=clamp(target.x,-36,37); target.z=clamp(target.z,-22,22);
-  const desired=Math.atan2(-toBall.z,-toBall.x);
-  let diff=Math.atan2(Math.sin(desired-aiYaw),Math.cos(desired-aiYaw));
-  aiYaw+=clamp(diff,-2.5*dt,2.5*dt);
-  const distance=toBall.length();
-  const accelerating=distance>2.1;
-  const boosting=distance>12&&aiSpeed<17;
-  if(accelerating) aiSpeed+= (boosting?25:17)*dt;
-  else aiSpeed*=Math.pow(.86,dt*60);
-  aiSpeed=clamp(aiSpeed,0,boosting?23:15);
-  const dir=new THREE.Vector3(Math.cos(aiYaw),0,-Math.sin(aiYaw));
-  opponent.position.addScaledVector(dir,aiSpeed*dt);
-  opponent.position.x=clamp(opponent.position.x,-39,39); opponent.position.z=clamp(opponent.position.z,-24,24);
-  opponent.rotation.y=-aiYaw;
-  opponent.userData.flame.visible=boosting;
-  opponent.userData.flame.scale.setScalar(boosting?1:0);
-  opponent.userData.wheels.forEach(w=>w.rotation.z-=aiSpeed*dt*1.7);
+  // Approach the ball from the orange-goal side so the car can push it
+  // toward the blue goal (negative X).
+  const goalDirection = new THREE.Vector3(-1, 0, 0);
+  const approachPoint = new THREE.Vector3(
+    ball.position.x - goalDirection.x * 3.2,
+    0,
+    ball.position.z
+  );
+  if (ball.position.x > 31) {
+    approachPoint.set(34, 0, clamp(ball.position.z * 0.7, -19, 19));
+  }
+  approachPoint.x = clamp(approachPoint.x, -36, 37);
+  approachPoint.z = clamp(approachPoint.z, -22, 22);
+
+  const toTarget = new THREE.Vector3(
+    approachPoint.x - opponent.position.x,
+    0,
+    approachPoint.z - opponent.position.z
+  );
+  const targetDistance = toTarget.length();
+
+  // In this game's coordinate system yaw=0 points along +X.
+  // atan2(-Z, X) therefore points the nose toward the target.
+  const desiredYaw = targetDistance > 0.8
+    ? Math.atan2(-toTarget.z, toTarget.x)
+    : Math.atan2(-(ball.position.z - opponent.position.z),
+                 ball.position.x - opponent.position.x);
+
+  let angleDifference = Math.atan2(
+    Math.sin(desiredYaw - aiYaw),
+    Math.cos(desiredYaw - aiYaw)
+  );
+  aiYaw += clamp(angleDifference, -2.8 * dt, 2.8 * dt);
+
+  const shouldDrive = targetDistance > 1.4;
+  const boosting = shouldDrive && targetDistance > 10 && aiSpeed < 17;
+  if (shouldDrive) aiSpeed += (boosting ? 25 : 18) * dt;
+  else aiSpeed *= Math.pow(0.78, dt * 60);
+
+  aiSpeed = clamp(aiSpeed, 0, boosting ? 22 : 14);
+  const forward = new THREE.Vector3(Math.cos(aiYaw), 0, -Math.sin(aiYaw));
+  opponent.position.addScaledVector(forward, aiSpeed * dt);
+  opponent.position.x = clamp(opponent.position.x, -39, 39);
+  opponent.position.z = clamp(opponent.position.z, -24, 24);
+  opponent.rotation.y = -aiYaw;
+
+  opponent.userData.flame.visible = boosting;
+  opponent.userData.flame.scale.setScalar(boosting ? 1 : 0);
+  opponent.userData.wheels.forEach(w => w.rotation.z -= aiSpeed * dt * 1.7);
 }
 function carBallCollision(car,carYaw,power){
   const carCenter=new THREE.Vector3(car.position.x,car.position.y+1.05,car.position.z);
