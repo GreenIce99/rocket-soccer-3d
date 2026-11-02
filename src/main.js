@@ -1,15 +1,15 @@
 import * as THREE from 'three';
 import './style.css';
 
-// =====================================
-// ROCKET SOCCER 3D
-// =====================================
+// ==========================================
+// ROCKET SOCCER 3D - IMPROVED GAME ENGINE
+// ==========================================
 
 const $ = (id) => document.getElementById(id);
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87c9ed);
-scene.fog = new THREE.Fog(0x87c9ed, 65, 150);
+scene.fog = new THREE.Fog(0x87c9ed, 80, 180);
 
 const camera = new THREE.PerspectiveCamera(
   65,
@@ -18,10 +18,7 @@ const camera = new THREE.PerspectiveCamera(
   300
 );
 
-const renderer = new THREE.WebGLRenderer({
-  antialias: true
-});
-
+const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
@@ -30,9 +27,9 @@ renderer.outputColorSpace = THREE.SRGBColorSpace;
 
 $('game').appendChild(renderer.domElement);
 
-// =====================================
+// ==========================================
 // LIGHTING
-// =====================================
+// ==========================================
 
 scene.add(new THREE.HemisphereLight(0xffffff, 0x35516b, 2));
 
@@ -42,9 +39,9 @@ sunlight.castShadow = true;
 sunlight.shadow.mapSize.set(2048, 2048);
 scene.add(sunlight);
 
-// =====================================
-// FIELD
-// =====================================
+// ==========================================
+// ARENA
+// ==========================================
 
 const field = new THREE.Mesh(
   new THREE.BoxGeometry(90, 1, 60),
@@ -58,12 +55,11 @@ field.position.y = -0.6;
 field.receiveShadow = true;
 scene.add(field);
 
-function addLine(x, z, width, depth, color = 0xffffff) {
+function addLine(x, z, width, depth) {
   const line = new THREE.Mesh(
-    new THREE.BoxGeometry(width, 0.035, depth),
-    new THREE.MeshBasicMaterial({ color })
+    new THREE.BoxGeometry(width, 0.04, depth),
+    new THREE.MeshBasicMaterial({ color: 0xffffff })
   );
-
   line.position.set(x, -0.06, z);
   scene.add(line);
 }
@@ -74,22 +70,20 @@ addLine(44.5, 0, 0.5, 60);
 addLine(0, -29.5, 90, 0.5);
 addLine(0, 29.5, 90, 0.5);
 
-// Center circle
-const circle = new THREE.Mesh(
+const centerCircle = new THREE.Mesh(
   new THREE.RingGeometry(8, 8.18, 80),
   new THREE.MeshBasicMaterial({
     color: 0xffffff,
     side: THREE.DoubleSide
   })
 );
+centerCircle.rotation.x = -Math.PI / 2;
+centerCircle.position.y = -0.045;
+scene.add(centerCircle);
 
-circle.rotation.x = -Math.PI / 2;
-circle.position.y = -0.045;
-scene.add(circle);
-
-// =====================================
+// ==========================================
 // GOALS
-// =====================================
+// ==========================================
 
 function createGoal(x, color) {
   const group = new THREE.Group();
@@ -100,25 +94,20 @@ function createGoal(x, color) {
     roughness: 0.4
   });
 
-  function post(y, z) {
-    const mesh = new THREE.Mesh(
-      new THREE.BoxGeometry(1, y, 1),
+  for (const z of [-8, 8]) {
+    const post = new THREE.Mesh(
+      new THREE.BoxGeometry(1, 8, 1),
       material
     );
-
-    mesh.position.set(0, y / 2, z);
-    mesh.castShadow = true;
-    group.add(mesh);
+    post.position.set(0, 4, z);
+    post.castShadow = true;
+    group.add(post);
   }
-
-  post(8, -8);
-  post(8, 8);
 
   const crossbar = new THREE.Mesh(
     new THREE.BoxGeometry(1, 0.7, 17),
     material
   );
-
   crossbar.position.set(0, 8, 0);
   group.add(crossbar);
 
@@ -142,9 +131,9 @@ function createGoal(x, color) {
 createGoal(-46, 0x249cff);
 createGoal(46, 0xff7a20);
 
-// =====================================
+// ==========================================
 // CAR CREATION
-// =====================================
+// ==========================================
 
 function createCar(color) {
   const group = new THREE.Group();
@@ -165,40 +154,31 @@ function createCar(color) {
     new THREE.BoxGeometry(3.8, 1, 2.2),
     paint
   );
-
   body.position.y = 0.9;
-  body.castShadow = true;
   group.add(body);
 
   const cabin = new THREE.Mesh(
     new THREE.BoxGeometry(1.8, 0.8, 1.7),
     dark
   );
-
   cabin.position.set(-0.3, 1.7, 0);
-  cabin.castShadow = true;
   group.add(cabin);
 
-  // Front bumper
   const bumper = new THREE.Mesh(
     new THREE.BoxGeometry(0.3, 0.3, 2.3),
     dark
   );
-
   bumper.position.set(2, 0.55, 0);
   group.add(bumper);
 
-  // Wheels
   for (const x of [-1.1, 1.1]) {
     for (const z of [-1.15, 1.15]) {
       const wheel = new THREE.Mesh(
         new THREE.CylinderGeometry(0.48, 0.48, 0.3, 20),
         dark
       );
-
       wheel.rotation.x = Math.PI / 2;
       wheel.position.set(x, 0.5, z);
-      wheel.castShadow = true;
       group.add(wheel);
     }
   }
@@ -211,9 +191,9 @@ function createCar(color) {
   return group;
 }
 
-// =====================================
+// ==========================================
 // BALL
-// =====================================
+// ==========================================
 
 const ballRadius = 0.85;
 
@@ -230,11 +210,8 @@ ball.position.set(0, ballRadius, 0);
 ball.castShadow = true;
 scene.add(ball);
 
-const ballVelocity = new THREE.Vector3();
-
-// Ball markings
 const ballLines = new THREE.Mesh(
-  new THREE.SphereGeometry(ballRadius + 0.008, 16, 12),
+  new THREE.SphereGeometry(ballRadius + 0.01, 16, 12),
   new THREE.MeshBasicMaterial({
     color: 0x263447,
     wireframe: true,
@@ -242,12 +219,13 @@ const ballLines = new THREE.Mesh(
     opacity: 0.3
   })
 );
-
 ball.add(ballLines);
 
-// =====================================
+const ballVelocity = new THREE.Vector3();
+
+// ==========================================
 // PLAYERS
-// =====================================
+// ==========================================
 
 const player = createCar(0x078cff);
 const ai = createCar(0xff761c);
@@ -255,18 +233,18 @@ const ai = createCar(0xff761c);
 let playerYaw = 0;
 let aiYaw = Math.PI;
 
-let playerVelocity = new THREE.Vector3();
-let aiVelocity = new THREE.Vector3();
+const playerVelocity = new THREE.Vector3();
+const aiVelocity = new THREE.Vector3();
 
 let playerBoost = 100;
+let aiBoost = 100;
+
 let jumping = false;
 let jumpVelocity = 0;
 
-let aiBoost = 100;
-
-// =====================================
+// ==========================================
 // GAME STATE
-// =====================================
+// ==========================================
 
 let blueScore = 0;
 let orangeScore = 0;
@@ -275,19 +253,22 @@ let timeLeft = 180;
 let playing = false;
 let paused = false;
 let overheadCamera = false;
+let goalCooldown = 0;
 
 let lastTime = 0;
-let goalCooldown = 0;
 
 const keys = {};
 
 window.addEventListener('keydown', (event) => {
   keys[event.code] = true;
 
-  if (
-    ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space']
-      .includes(event.code)
-  ) {
+  if ([
+    'ArrowUp',
+    'ArrowDown',
+    'ArrowLeft',
+    'ArrowRight',
+    'Space'
+  ].includes(event.code)) {
     event.preventDefault();
   }
 
@@ -296,6 +277,7 @@ window.addEventListener('keydown', (event) => {
 
   if (event.code === 'Escape' && playing) {
     paused = !paused;
+
     $('message').style.display = paused ? 'flex' : 'none';
     $('messageTitle').textContent = paused ? 'PAUSED' : '';
     $('messageSub').textContent = paused ? 'Take a break!' : '';
@@ -318,9 +300,9 @@ window.addEventListener('blur', () => {
   for (const key in keys) keys[key] = false;
 });
 
-// =====================================
-// RESET
-// =====================================
+// ==========================================
+// RESET POSITIONS
+// ==========================================
 
 function resetPositions() {
   player.position.set(-12, 0, 0);
@@ -344,9 +326,9 @@ function resetPositions() {
   goalCooldown = 1;
 }
 
-// =====================================
+// ==========================================
 // PLAYER MOVEMENT
-// =====================================
+// ==========================================
 
 function updatePlayer(dt) {
   const forward = new THREE.Vector3(
@@ -355,30 +337,14 @@ function updatePlayer(dt) {
     Math.sin(playerYaw)
   );
 
-  const accelerating =
-    keys.KeyW || keys.ArrowUp;
+  const accelerating = keys.KeyW || keys.ArrowUp;
+  const reversing = keys.KeyS || keys.ArrowDown;
+  const left = keys.KeyA || keys.ArrowLeft;
+  const right = keys.KeyD || keys.ArrowRight;
+  const boosting = keys.ShiftLeft || keys.ShiftRight;
 
-  const reversing =
-    keys.KeyS || keys.ArrowDown;
-
-  const left =
-    keys.KeyA || keys.ArrowLeft;
-
-  const right =
-    keys.KeyD || keys.ArrowRight;
-
-  const boosting =
-    keys.ShiftLeft || keys.ShiftRight;
-
-  if (left) {
-    playerYaw += 2.7 * dt *
-      (playerVelocity.length() > 0.5 ? 1 : 0.6);
-  }
-
-  if (right) {
-    playerYaw -= 2.7 * dt *
-      (playerVelocity.length() > 0.5 ? 1 : 0.6);
-  }
+  if (left) playerYaw += 2.7 * dt;
+  if (right) playerYaw -= 2.7 * dt;
 
   if (accelerating) {
     playerVelocity.addScaledVector(forward, 23 * dt);
@@ -402,14 +368,11 @@ function updatePlayer(dt) {
   }
 
   playerVelocity.multiplyScalar(Math.pow(0.985, dt * 60));
-
   player.position.addScaledVector(playerVelocity, dt);
 
-  // Keep player inside arena
   player.position.x = THREE.MathUtils.clamp(player.position.x, -42, 42);
   player.position.z = THREE.MathUtils.clamp(player.position.z, -27, 27);
 
-  // Jump physics
   if (jumping) {
     player.position.y += jumpVelocity * dt;
     jumpVelocity -= 25 * dt;
@@ -424,21 +387,25 @@ function updatePlayer(dt) {
   player.rotation.y = -playerYaw;
 }
 
-// =====================================
-// AI MOVEMENT
-// =====================================
+// ==========================================
+// IMPROVED AI
+// ==========================================
 
 function updateAI(dt) {
-  const target = new THREE.Vector3(
-    ball.position.x + 3,
-    0,
-    ball.position.z
-  );
+  // Find the ball's position.
+  const dx = ball.position.x - ai.position.x;
+  const dz = ball.position.z - ai.position.z;
 
-  const dx = target.x - ai.position.x;
-  const dz = target.z - ai.position.z;
+  const distance = Math.sqrt(dx * dx + dz * dz);
 
-  const desiredYaw = Math.atan2(dz, dx);
+  // Predict where the ball will be shortly.
+  const predictedX = ball.position.x + ballVelocity.x * 0.3;
+  const predictedZ = ball.position.z + ballVelocity.z * 0.3;
+
+  const targetDx = predictedX - ai.position.x;
+  const targetDz = predictedZ - ai.position.z;
+
+  const desiredYaw = Math.atan2(targetDz, targetDx);
 
   let difference = desiredYaw - aiYaw;
 
@@ -447,8 +414,8 @@ function updateAI(dt) {
 
   aiYaw += THREE.MathUtils.clamp(
     difference,
-    -2.4 * dt,
-    2.4 * dt
+    -3.8 * dt,
+    3.8 * dt
   );
 
   const forward = new THREE.Vector3(
@@ -457,24 +424,28 @@ function updateAI(dt) {
     Math.sin(aiYaw)
   );
 
-  const distance = Math.sqrt(dx * dx + dz * dz);
-
-  if (distance > 2.5) {
-    aiVelocity.addScaledVector(forward, 15 * dt);
+  // Keep chasing the ball.
+  if (distance > 1.3) {
+    const acceleration = distance > 8 ? 29 : 21;
+    aiVelocity.addScaledVector(forward, acceleration * dt);
   }
 
-  if (distance > 13 && aiBoost > 0) {
-    aiVelocity.addScaledVector(forward, 17 * dt);
-    aiBoost = Math.max(0, aiBoost - 15 * dt);
+  // Boost when far from the ball.
+  if (distance > 10 && aiBoost > 0) {
+    aiVelocity.addScaledVector(forward, 20 * dt);
+    aiBoost = Math.max(0, aiBoost - 18 * dt);
   } else {
-    aiBoost = Math.min(100, aiBoost + 8 * dt);
+    aiBoost = Math.min(100, aiBoost + 12 * dt);
   }
 
-  if (aiVelocity.length() > 23) {
-    aiVelocity.setLength(23);
+  // Keep the AI moving quickly.
+  const maxSpeed = distance > 8 ? 29 : 24;
+
+  if (aiVelocity.length() > maxSpeed) {
+    aiVelocity.setLength(maxSpeed);
   }
 
-  aiVelocity.multiplyScalar(Math.pow(0.988, dt * 60));
+  aiVelocity.multiplyScalar(Math.pow(0.994, dt * 60));
 
   ai.position.addScaledVector(aiVelocity, dt);
 
@@ -484,9 +455,9 @@ function updateAI(dt) {
   ai.rotation.y = -aiYaw;
 }
 
-// =====================================
+// ==========================================
 // CAR AND BALL COLLISIONS
-// =====================================
+// ==========================================
 
 function collideCarWithBall(car, velocity, yaw) {
   const difference = new THREE.Vector3(
@@ -496,39 +467,48 @@ function collideCarWithBall(car, velocity, yaw) {
   );
 
   const distance = difference.length();
-  const minimumDistance = 2.0;
+  const collisionDistance = 2.8;
 
-  if (distance < minimumDistance && distance > 0.001) {
+  if (distance < collisionDistance && distance > 0.001) {
     const normal = difference.normalize();
 
-    const overlap = minimumDistance - distance;
+    const overlap = collisionDistance - distance;
 
-    ball.position.x += normal.x * overlap * 0.7;
-    ball.position.z += normal.z * overlap * 0.7;
+    ball.position.x += normal.x * overlap * 0.8;
+    ball.position.z += normal.z * overlap * 0.8;
 
     const impact = Math.max(0, velocity.dot(normal));
 
-    ballVelocity.x += normal.x * (impact * 0.65 + 5);
-    ballVelocity.z += normal.z * (impact * 0.65 + 5);
+    ballVelocity.x += normal.x * (impact * 0.9 + 9);
+    ballVelocity.z += normal.z * (impact * 0.9 + 9);
+    ballVelocity.y += 2.5;
 
-    const facing = new THREE.Vector3(
+    const forward = new THREE.Vector3(
       Math.cos(yaw),
       0,
       Math.sin(yaw)
     );
 
-    ballVelocity.addScaledVector(facing, 2.5);
+    ballVelocity.addScaledVector(forward, 5);
 
-    ballVelocity.y += car.position.y > 0.2 ? 3 : 1.5;
+    if (ballVelocity.length() > 40) {
+      ballVelocity.setLength(40);
+    }
   }
 }
 
+// ==========================================
+// BALL PHYSICS
+// ==========================================
+
 function updateBall(dt) {
+  // Gravity
   ballVelocity.y -= 15 * dt;
 
+  // Movement
   ball.position.addScaledVector(ballVelocity, dt);
 
-  // Floor bounce
+  // Ground collision
   if (ball.position.y < ballRadius) {
     ball.position.y = ballRadius;
 
@@ -548,9 +528,10 @@ function updateBall(dt) {
     ballVelocity.z *= -0.75;
   }
 
-  // End walls, leaving goal openings
+  // End walls
   if (Math.abs(ball.position.x) > 44) {
-    const inGoal = Math.abs(ball.position.z) < 8 &&
+    const inGoal =
+      Math.abs(ball.position.z) < 8 &&
       ball.position.y < 8;
 
     if (!inGoal) {
@@ -562,21 +543,41 @@ function updateBall(dt) {
   // Air resistance
   ballVelocity.multiplyScalar(Math.pow(0.997, dt * 60));
 
+  // Collisions
   collideCarWithBall(player, playerVelocity, playerYaw);
   collideCarWithBall(ai, aiVelocity, aiYaw);
 
-  // Limit extreme ball speeds
+  // Speed limit
   if (ballVelocity.length() > 40) {
     ballVelocity.setLength(40);
   }
 
+  // Ball rotation
   ball.rotation.x += ballVelocity.z * dt * 0.5;
   ball.rotation.z -= ballVelocity.x * dt * 0.5;
 }
 
-// =====================================
-// GOALS
-// =====================================
+// ==========================================
+// SCORING
+// ==========================================
+
+function scoreGoal(message) {
+  blueScore = Math.max(0, blueScore);
+  orangeScore = Math.max(0, orangeScore);
+
+  $('blueScore').textContent = blueScore;
+  $('orangeScore').textContent = orangeScore;
+
+  goalCooldown = 2.5;
+
+  $('messageTitle').textContent = message;
+  $('messageSub').textContent = 'Get ready for kickoff!';
+  $('playBtn').textContent = 'CONTINUE';
+  $('message').style.display = 'flex';
+
+  paused = true;
+  resetPositions();
+}
 
 function checkGoals() {
   if (goalCooldown > 0) return;
@@ -600,24 +601,9 @@ function checkGoals() {
   }
 }
 
-function scoreGoal(message) {
-  $('blueScore').textContent = blueScore;
-  $('orangeScore').textContent = orangeScore;
-
-  goalCooldown = 2.5;
-
-  $('messageTitle').textContent = message;
-  $('messageSub').textContent = 'Get ready for kickoff!';
-  $('playBtn').textContent = 'CONTINUE';
-  $('message').style.display = 'flex';
-
-  paused = true;
-  resetPositions();
-}
-
-// =====================================
+// ==========================================
 // CAMERA
-// =====================================
+// ==========================================
 
 const cameraTarget = new THREE.Vector3();
 
@@ -658,11 +644,11 @@ function updateCamera(dt) {
   camera.lookAt(cameraTarget);
 }
 
-// =====================================
-// UI
-// =====================================
+// ==========================================
+// USER INTERFACE
+// ==========================================
 
-function updateUI(dt) {
+function updateUI() {
   $('boostFill').style.width = playerBoost + '%';
   $('boostValue').textContent = Math.round(playerBoost);
 
@@ -673,27 +659,27 @@ function updateUI(dt) {
     `${minutes}:${seconds.toString().padStart(2, '0')}`;
 }
 
-// =====================================
-// START GAME
-// =====================================
+// ==========================================
+// START AND RESUME
+// ==========================================
 
 $('playBtn').addEventListener('click', () => {
-  if (paused && playing && goalCooldown > 0) {
-    goalCooldown = 0;
-  }
-
   if (!playing) {
     playing = true;
     resetPositions();
+  }
+
+  if (goalCooldown > 0) {
+    goalCooldown = 0;
   }
 
   paused = false;
   $('message').style.display = 'none';
 });
 
-// =====================================
-// GAME LOOP
-// =====================================
+// ==========================================
+// MAIN GAME LOOP
+// ==========================================
 
 function animate(timestamp) {
   requestAnimationFrame(animate);
@@ -743,16 +729,16 @@ function animate(timestamp) {
       $('orangeScore').textContent = '0';
     }
 
-    updateUI(dt);
+    updateUI();
   }
 
   updateCamera(dt);
   renderer.render(scene, camera);
 }
 
-// =====================================
+// ==========================================
 // RESIZE
-// =====================================
+// ==========================================
 
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
@@ -768,9 +754,9 @@ window.addEventListener('resize', () => {
   );
 });
 
-// =====================================
+// ==========================================
 // INITIALIZE
-// =====================================
+// ==========================================
 
 resetPositions();
 
