@@ -1,8 +1,10 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#07101e">
   <title>Rocket Soccer 3D</title>
 </head>
 <body>
@@ -12,10 +14,12 @@
         <span>BLUE</span>
         <strong id="blueScore">0</strong>
       </div>
+
       <div class="match-clock">
         <span id="matchStatus">KICKOFF</span>
         <strong id="timer">3:00</strong>
       </div>
+
       <div class="score orange">
         <strong id="orangeScore">0</strong>
         <span>ORANGE</span>
@@ -27,30 +31,39 @@
         <span>BOOST</span>
         <strong id="boostValue">100</strong>
       </div>
-      <div class="boost-track"><div id="boostFill"></div></div>
+      <div class="boost-track">
+        <div id="boostFill"></div>
+      </div>
     </div>
 
     <div id="gameMessage"></div>
 
     <div id="gameControls">
       <span>W / ↑ ACCELERATE</span>
-      <span>S / ↓ REVERSE</span>
-      <span>SPACE BRAKE</span>
+      <span>S REVERSE</span>
+      <span>↓ BRAKE</span>
+      <span>SPACE JUMP</span>
       <span>SHIFT BOOST</span>
-      <span>E JUMP</span>
       <span>A / D STEER</span>
+      <span>C CAMERA</span>
+      <span>R RESET</span>
       <span>ESC MENU</span>
     </div>
 
     <section id="mainMenu" class="overlay">
       <div class="menu-top">
-        <div class="brand"><span class="brand-mark">R</span> ROCKET <b>SOCCER</b></div>
+        <div class="brand">
+          <span class="brand-mark">R</span>
+          ROCKET <b>SOCCER</b>
+        </div>
         <button id="soundToggle" class="small-button">SOUND: ON</button>
       </div>
 
       <div class="menu-content">
         <div class="eyebrow">THE ARENA IS YOURS</div>
+
         <h1>ROCKET<br><span>SOCCER</span></h1>
+
         <p class="menu-subtitle">DRIVE. BOOST. FLY. SCORE.</p>
 
         <button id="playBtn" class="play-button">
@@ -63,29 +76,40 @@
           <button id="howBtn" class="menu-button">HOW TO PLAY</button>
         </div>
 
-        <div class="menu-footer">3D ARCADE SOCCER • ONE PLAYER</div>
+        <div class="menu-footer">
+          3D ARCADE SOCCER • ONLINE & SINGLE PLAYER
+        </div>
       </div>
 
       <div id="garagePanel" class="popup-panel hidden">
         <button class="close-panel" data-close>✕</button>
         <h2>GARAGE</h2>
         <p>CHOOSE YOUR CAR COLOR</p>
+
         <div class="car-colors">
-          <button class="color-choice selected" data-color="#168cff" style="--car-color:#168cff">BLUE</button>
-          <button class="color-choice" data-color="#ff792c" style="--car-color:#ff792c">ORANGE</button>
-          <button class="color-choice" data-color="#a855f7" style="--car-color:#a855f7">PURPLE</button>
-          <button class="color-choice" data-color="#19d6a0" style="--car-color:#19d6a0">MINT</button>
-          <button class="color-choice" data-color="#f4d03f" style="--car-color:#f4d03f">GOLD</button>
+          <button class="color-choice selected" data-color="#168cff"
+            style="--car-color:#168cff">BLUE</button>
+          <button class="color-choice" data-color="#ff792c"
+            style="--car-color:#ff792c">ORANGE</button>
+          <button class="color-choice" data-color="#a855f7"
+            style="--car-color:#a855f7">PURPLE</button>
+          <button class="color-choice" data-color="#19d6a0"
+            style="--car-color:#19d6a0">MINT</button>
+          <button class="color-choice" data-color="#f4d03f"
+            style="--car-color:#f4d03f">GOLD</button>
         </div>
       </div>
 
       <div id="settingsPanel" class="popup-panel hidden">
         <button class="close-panel" data-close>✕</button>
         <h2>SETTINGS</h2>
+
         <label>MASTER VOLUME <span id="masterLabel">70%</span></label>
         <input id="masterVolume" type="range" min="0" max="100" value="70">
+
         <label>MUSIC VOLUME <span id="musicLabel">35%</span></label>
         <input id="musicVolume" type="range" min="0" max="100" value="35">
+
         <label>SOUND EFFECTS <span id="effectsLabel">85%</span></label>
         <input id="effectsVolume" type="range" min="0" max="100" value="85">
       </div>
@@ -94,11 +118,12 @@
         <button class="close-panel" data-close>✕</button>
         <h2>HOW TO PLAY</h2>
         <p><b>W / UP:</b> Accelerate</p>
-        <p><b>S / DOWN:</b> Reverse</p>
-        <p><b>SPACE:</b> Strong brake / handbrake</p>
+        <p><b>S:</b> Reverse</p>
+        <p><b>DOWN ARROW:</b> Brake</p>
+        <p><b>SPACE:</b> Jump</p>
         <p><b>A / D:</b> Steer</p>
         <p><b>SHIFT:</b> Rocket boost</p>
-        <p><b>E:</b> Jump</p>
+        <p><b>C:</b> Change camera</p>
         <p><b>R:</b> Reset positions</p>
         <p><b>ESC:</b> Pause / menu</p>
       </div>
@@ -124,6 +149,10 @@
     </section>
   </div>
 
+  <!-- Firebase multiplayer lobby -->
+  <script type="module" src="/src/multiplayer.js"></script>
+
+  <!-- Main 3D game -->
   <script type="module" src="/src/main.js"></script>
 </body>
 </html>
