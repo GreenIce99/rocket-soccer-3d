@@ -1,3 +1,4 @@
+
 import * as THREE from 'three';
 import './style.css';
 
@@ -956,16 +957,29 @@ function updateCamera(dt) {
   let desiredPosition;
 
   if (cameraMode === 0) {
+    // Close chase view: keep the car and nearby field in frame.
     const facing = getForward(player.userData.yaw);
     desiredPosition = target.clone()
-      .addScaledVector(facing, -11)
-      .add(new THREE.Vector3(0, 6.2, 0));
+      .addScaledVector(facing, -8.5)
+      .add(new THREE.Vector3(0, 4.5, 0));
   } else {
-    desiredPosition = new THREE.Vector3(0, 36, 0.1);
+    // Elevated view that still frames the actual match area.
+    desiredPosition = new THREE.Vector3(
+      player.position.x + 2,
+      24,
+      player.position.z + 8
+    );
   }
 
-  camera.position.lerp(desiredPosition, 1 - Math.exp(3.5 * dt));
-  camera.lookAt(target.x, target.y + 0.8, target.z);
+  // IMPORTANT: the negative exponent makes the camera smoothly approach
+  // the target. A positive exponent makes it move away and can look zoomed out.
+  const smoothness = 1 - Math.exp(-7 * dt);
+  camera.position.lerp(desiredPosition, smoothness);
+  camera.lookAt(
+    target.x,
+    target.y + (cameraMode === 0 ? 0.9 : 0),
+    target.z
+  );
 }
 
 // Menu panels
