@@ -25,7 +25,8 @@ style.textContent = `
 }
 #onlinePanel.open {display:flex}
 .online-card {
-  width:min(480px,92vw); padding:30px;
+  width:min(480px,92vw); max-height:90vh; overflow:auto;
+  padding:30px; box-sizing:border-box;
   border:1px solid #248dff; border-radius:16px;
   background:linear-gradient(145deg,#10233d,#07101e);
   box-shadow:0 0 45px #087bff33;
@@ -105,8 +106,8 @@ panel.innerHTML = `
 
     <div id="onlineStatus">Connecting to Firebase...</div>
     <div class="online-small">
-      Online rooms are being connected. Live gameplay synchronization
-      is the next integration step.
+      Quick Match finds a waiting player or creates a room for you.
+      Both players must join before the host starts.
     </div>
   </div>
 `;
@@ -119,7 +120,7 @@ let currentRoomCode = null;
 let roomListener = null;
 let chatListener = null;
 let isHost = false;
-let currentRoomData = null;
+let busy = false;
 
 function status(message) {
   $('onlineStatus').textContent = message;
@@ -144,6 +145,14 @@ function makeCode() {
     code += chars[Math.floor(Math.random() * chars.length)];
   }
   return code;
+}
+
+function setBusy(value) {
+  busy = value;
+  $('quickMatchBtn').disabled = value;
+  $('createRoomBtn').disabled = value;
+  $('joinRoomBtn').disabled = value;
+  $('quickMatchBtn').textContent = value ? 'PLEASE WAIT...' : 'QUICK MATCH';
 }
 
 function showRoom() {
@@ -177,8 +186,8 @@ function watchRoom() {
       return;
     }
 
-    currentRoomData = snapshot.val();
-    const players = currentRoomData.players || {};
+    const room = snapshot.val();
+    const players = room.players || {};
     const names = Object.values(players).map(p => p.name || 'Player');
 
     $('onlinePlayers').textContent =
@@ -186,16 +195,12 @@ function watchRoom() {
         ? `${names[0]} vs ${names[1]} — both players connected`
         : `${names[0] || 'Player'} — waiting for an opponent...`;
 
-    $('startOnlineBtn').disabled = !isHost || names.length < 2;
-    status(
-      currentRoomData.status === 'playing'
-        ? 'Match marked as started.'
-        : names.length >= 2
-          ? 'Opponent connected!'
-          : 'Room created. Share your code!'
-    );
+    $('startOnlineBtn').disabled = !isHost ||
+      names.length < 2 || room.status === 'playing';
 
-    if (currentRoomData.status === 'playing') {
+    if (room.status === 'playing') {
+      status('Match started! Gameplay synchronization is not connected yet.');
+
       window.dispatchEvent(new CustomEvent('rocket-online-start', {
         detail: {
           roomId: currentRoomId,
@@ -203,10 +208,17 @@ function watchRoom() {
           players
         }
       }));
+    } else {
+      status(names.length >= 2
+        ? 'Opponent connected! Host can start the match.'
+        : 'Room created. Share your code with a friend!');
     }
+  }, error => {
+    status(`Room update error: ${error.message}`);
   });
 
   const messagesRef = ref(database, `rooms/${currentRoomId}/chat`);
+
   chatListener = onValue(messagesRef, snapshot => {
     const messages = snapshot.val() || {};
     const entries = Object.values(messages).slice(-35);
@@ -226,13 +238,22 @@ function watchRoom() {
     }
 
     $('onlineChat').scrollTop = $('onlineChat').scrollHeight;
+  }, error => {
+    status(`Chat error: ${error.message}`);
   });
 }
 
 async function createRoom() {
+  if (busy) return;
+  setBusy(true);
   status('Creating your room...');
+
   try {
-    const uid = auth.currentUser.uid;
+    await playerReady;
+
+    const uid = auth.currentUser?.uid;
+    if (!uid) throw new Error('You are not signed in to Firebase.');
+
     const code = makeCode();
     const roomRef = push(ref(database, 'rooms'));
 
@@ -253,29 +274,43 @@ async function createRoom() {
       }
     });
 
-    await onDisconnect(ref(database, `rooms/${currentRoomId}/players/${uid}`))
-      .remove();
+    await onDisconnect(ref(database,
+      `rooms/${currentRoomId}/players/${uid}`)).remove();
 
     showRoom();
     watchRoom();
-    status('Room created! Share your code.');
+    status('Room created! Share your code with a friend.');
   } catch (error) {
     status(`Could not create room: ${error.message}`);
+    console.error(error);
+  } finally {
+    setBusy(false);
   }
 }
 
 async function joinRoom(code) {
+  if (busy) return;
+
+  code = code.toUpperCase().trim();
+
   if (!code || code.length !== 6) {
     status('Enter a valid 6-character room code.');
     return;
   }
 
+  setBusy(true);
   status('Looking for room...');
+
   try {
+    await playerReady;
+
+    const uid = auth.currentUser?.uid;
+    if (!uid) throw new Error('You are not signed in to Firebase.');
+
     const roomsQuery = query(
       ref(database, 'rooms'),
       orderByChild('code'),
-      equalTo(code.toUpperCase())
+      equalTo(code)
     );
 
     const snapshot = await get(roomsQuery);
@@ -286,34 +321,32 @@ async function joinRoom(code) {
     }
 
     let foundId = null;
-    let foundRoom = null;
 
     snapshot.forEach(child => {
       foundId = child.key;
-      foundRoom = child.val();
     });
 
-    if (!foundId || !foundRoom) {
+    if (!foundId) {
       status('Room not found.');
       return;
     }
 
-    const uid = auth.currentUser.uid;
-    const playersRef = ref(database, `rooms/${foundId}/players`);
+    const roomRef = ref(database, `rooms/${foundId}`);
 
-    const result = await runTransaction(playersRef, players => {
-      players = players || {};
+    const result = await runTransaction(roomRef, room => {
+      if (!room || room.status !== 'waiting') return;
 
-      if (players[uid]) return players;
-      if (Object.keys(players).length >= 2) return;
-      if (foundRoom.status !== 'waiting') return;
+      room.players = room.players || {};
 
-      players[uid] = {
+      if (room.players[uid]) return room;
+      if (Object.keys(room.players).length >= 2) return;
+
+      room.players[uid] = {
         name: playerName(),
         joinedAt: Date.now()
       };
 
-      return players;
+      return room;
     });
 
     if (!result.committed) {
@@ -322,25 +355,35 @@ async function joinRoom(code) {
     }
 
     currentRoomId = foundId;
-    currentRoomCode = code.toUpperCase();
+    currentRoomCode = code;
     isHost = false;
 
-    await onDisconnect(ref(database, `rooms/${foundId}/players/${uid}`))
-      .remove();
+    await onDisconnect(ref(database,
+      `rooms/${foundId}/players/${uid}`)).remove();
 
     showRoom();
     watchRoom();
     status('Joined room successfully!');
   } catch (error) {
     status(`Could not join room: ${error.message}`);
+    console.error(error);
+  } finally {
+    setBusy(false);
   }
 }
 
 async function quickMatch() {
+  if (busy) return;
+
+  setBusy(true);
   status('Searching for an opponent...');
 
   try {
-    const uid = auth.currentUser.uid;
+    await playerReady;
+
+    const uid = auth.currentUser?.uid;
+    if (!uid) throw new Error('You are not signed in to Firebase.');
+
     const waitingQuery = query(
       ref(database, 'rooms'),
       orderByChild('status'),
@@ -350,63 +393,102 @@ async function quickMatch() {
     const snapshot = await get(waitingQuery);
 
     if (snapshot.exists()) {
-      for (const child of Object.values(snapshot.val())) {
-        // The room code is used to locate the room below.
-        if (!child.code || !child.host || child.host === uid) continue;
+      const candidates = [];
 
-        const roomQuery = query(
-          ref(database, 'rooms'),
-          orderByChild('code'),
-          equalTo(child.code)
-        );
-        const roomSnapshot = await get(roomQuery);
+      snapshot.forEach(child => {
+        const room = child.val();
 
-        let roomId = null;
-        roomSnapshot.forEach(item => { roomId = item.key; });
+        if (
+          room &&
+          room.host &&
+          room.host !== uid &&
+          room.status === 'waiting'
+        ) {
+          candidates.push({
+            id: child.key,
+            code: room.code
+          });
+        }
+      });
 
-        if (!roomId) continue;
+      for (const candidate of candidates) {
+        const roomRef = ref(database, `rooms/${candidate.id}`);
 
-        const playersRef = ref(database, `rooms/${roomId}/players`);
-        const result = await runTransaction(playersRef, players => {
-          players = players || {};
-          if (players[uid]) return players;
-          if (Object.keys(players).length >= 2) return;
-          players[uid] = {
+        const result = await runTransaction(roomRef, room => {
+          if (!room || room.status !== 'waiting') return;
+          if (!room.host || room.host === uid) return;
+
+          room.players = room.players || {};
+
+          if (room.players[uid]) return room;
+          if (Object.keys(room.players).length >= 2) return;
+
+          room.players[uid] = {
             name: playerName(),
             joinedAt: Date.now()
           };
-          return players;
+
+          return room;
         });
 
         if (result.committed) {
-          currentRoomId = roomId;
-          currentRoomCode = child.code;
+          const joinedRoom = result.snapshot.val();
+
+          currentRoomId = candidate.id;
+          currentRoomCode = joinedRoom.code;
           isHost = false;
 
-          await onDisconnect(
-            ref(database, `rooms/${roomId}/players/${uid}`)
-          ).remove();
+          await onDisconnect(ref(database,
+            `rooms/${currentRoomId}/players/${uid}`)).remove();
 
           showRoom();
           watchRoom();
-          status('Opponent found!');
+          status('Opponent found! Waiting for the host to start.');
           return;
         }
       }
     }
 
-    await createRoom();
-    status('No opponent found yet. Your room is waiting!');
+    // No available opponent: create a room and wait.
+    const code = makeCode();
+    const roomRef = push(ref(database, 'rooms'));
+
+    currentRoomId = roomRef.key;
+    currentRoomCode = code;
+    isHost = true;
+
+    await set(roomRef, {
+      code,
+      host: uid,
+      status: 'waiting',
+      createdAt: Date.now(),
+      players: {
+        [uid]: {
+          name: playerName(),
+          joinedAt: Date.now()
+        }
+      }
+    });
+
+    await onDisconnect(ref(database,
+      `rooms/${currentRoomId}/players/${uid}`)).remove();
+
+    showRoom();
+    watchRoom();
+    status('No opponent found. Your room is ready — share the code!');
   } catch (error) {
     status(`Quick Match error: ${error.message}`);
+    console.error('Quick Match failed:', error);
+  } finally {
+    setBusy(false);
   }
 }
 
 async function sendChat() {
   if (!currentRoomId) return;
 
-  const text = $('onlineChatInput').value.trim();
-  if (!text) return;
+  const messageText = $('onlineChatInput').value.trim();
+  if (!messageText) return;
 
   $('onlineChatInput').value = '';
 
@@ -414,7 +496,7 @@ async function sendChat() {
     await push(ref(database, `rooms/${currentRoomId}/chat`), {
       uid: auth.currentUser.uid,
       name: playerName(),
-      text,
+      text: messageText,
       sentAt: Date.now()
     });
   } catch (error) {
@@ -427,22 +509,23 @@ async function startOnlineMatch() {
 
   try {
     const roomRef = ref(database, `rooms/${currentRoomId}`);
-    const snapshot = await get(roomRef);
 
-    if (!snapshot.exists()) return;
+    const result = await runTransaction(roomRef, room => {
+      if (!room || room.status !== 'waiting') return;
+      if (Object.keys(room.players || {}).length < 2) return;
 
-    const room = snapshot.val();
-    if (Object.keys(room.players || {}).length < 2) {
-      status('Wait for another player first.');
+      room.status = 'playing';
+      room.startedAt = Date.now();
+
+      return room;
+    });
+
+    if (!result.committed) {
+      status('You need two players before starting.');
       return;
     }
 
-    await update(roomRef, {
-      status: 'playing',
-      startedAt: Date.now()
-    });
-
-    status('Match started!');
+    status('Match started! Gameplay synchronization is the next step.');
   } catch (error) {
     status(`Could not start match: ${error.message}`);
   }
@@ -451,18 +534,19 @@ async function startOnlineMatch() {
 async function leaveRoom(removeRoom = true) {
   stopListeners();
 
-  if (currentRoomId && auth.currentUser) {
-    const roomRef = ref(database, `rooms/${currentRoomId}`);
-    const playerRef = ref(
-      database,
-      `rooms/${currentRoomId}/players/${auth.currentUser.uid}`
-    );
+  const oldRoomId = currentRoomId;
+  const wasHost = isHost;
+
+  if (oldRoomId && auth.currentUser) {
+    const roomRef = ref(database, `rooms/${oldRoomId}`);
+    const playerRef = ref(database,
+      `rooms/${oldRoomId}/players/${auth.currentUser.uid}`);
 
     try {
-      await remove(playerRef);
-
-      if (removeRoom && isHost) {
+      if (wasHost && removeRoom) {
         await remove(roomRef);
+      } else {
+        await remove(playerRef);
       }
     } catch (error) {
       console.warn('Room cleanup:', error);
@@ -471,7 +555,6 @@ async function leaveRoom(removeRoom = true) {
 
   currentRoomId = null;
   currentRoomCode = null;
-  currentRoomData = null;
   isHost = false;
 
   showHome();
@@ -484,7 +567,7 @@ $('quickMatchBtn').addEventListener('click', quickMatch);
 $('createRoomBtn').addEventListener('click', createRoom);
 
 $('joinRoomBtn').addEventListener('click', () => {
-  joinRoom($('joinCodeInput').value.trim());
+  joinRoom($('joinCodeInput').value);
 });
 
 $('joinCodeInput').addEventListener('input', event => {
@@ -495,6 +578,7 @@ $('joinCodeInput').addEventListener('input', event => {
 });
 
 $('sendChatBtn').addEventListener('click', sendChat);
+
 $('onlineChatInput').addEventListener('keydown', event => {
   if (event.key === 'Enter') sendChat();
 });
@@ -505,6 +589,7 @@ $('leaveRoomBtn').addEventListener('click', () => leaveRoom());
 async function initializeOnline() {
   try {
     await playerReady;
+
     status('Connected to Firebase!');
 
     const button = document.createElement('button');
@@ -515,6 +600,7 @@ async function initializeOnline() {
     button.addEventListener('click', openPanel);
 
     const playButton = document.getElementById('playBtn');
+
     if (playButton) {
       playButton.insertAdjacentElement('afterend', button);
     } else {
