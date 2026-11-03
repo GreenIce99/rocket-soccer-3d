@@ -1,138 +1,200 @@
 
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@500;600;700;800;900&family=Rajdhani:wght@500;600;700;800&display=swap');
+
 * {
   box-sizing: border-box;
 }
 
+:root {
+  color-scheme: dark;
+  --blue: #24aaff;
+  --orange: #ff852b;
+  --panel: rgba(5, 15, 30, 0.86);
+}
+
+html,
 body {
+  width: 100%;
+  height: 100%;
   margin: 0;
   overflow: hidden;
-  background: #07111d;
-  font-family: Arial, sans-serif;
+  background: #071426;
   color: white;
+  font-family: 'Rajdhani', Arial, sans-serif;
+}
+
+body {
+  user-select: none;
 }
 
 #game {
+  position: relative;
   width: 100vw;
   height: 100vh;
-  position: relative;
   overflow: hidden;
+  isolation: isolate;
+  background: #071426;
 }
 
-canvas {
+#game canvas {
+  position: absolute;
+  inset: 0;
   display: block;
   width: 100%;
   height: 100%;
+  outline: none;
 }
+
+/* SCOREBOARD */
 
 #hud {
   position: absolute;
-  top: 20px;
+  top: 22px;
   left: 50%;
-  transform: translateX(-50%);
+  z-index: 5;
   display: flex;
   align-items: center;
-  gap: 18px;
-  z-index: 5;
+  gap: 12px;
+  transform: translateX(-50%);
   pointer-events: none;
 }
 
 .team {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 20px;
-  border-radius: 12px;
-  font-weight: bold;
-  min-width: 115px;
   justify-content: center;
+  gap: 15px;
+  min-width: 150px;
+  padding: 10px 22px;
+  border-radius: 9px;
+  background: var(--panel);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 8px 30px #0008;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 2px;
 }
 
 .team strong {
-  font-size: 30px;
+  font-size: 31px;
+  line-height: 1;
+  color: white;
 }
 
 .blue {
-  background: #0759b8dd;
-  border: 2px solid #36a5ff;
+  border: 1px solid #269fff;
+  border-left: 4px solid #269fff;
+  box-shadow: 0 0 22px #008cff30;
 }
 
 .orange {
-  background: #b84b08dd;
-  border: 2px solid #ff9c38;
+  border: 1px solid #ff852b;
+  border-right: 4px solid #ff852b;
+  box-shadow: 0 0 22px #ff852b30;
 }
 
 #timer {
-  background: #07111ddd;
-  border: 2px solid #ffffff55;
-  border-radius: 10px;
-  padding: 12px 18px;
+  min-width: 100px;
+  padding: 13px 17px;
+  border: 1px solid #ffffff35;
+  border-radius: 9px;
+  background: rgba(4, 12, 24, 0.94);
+  font-family: 'Orbitron', sans-serif;
   font-size: 25px;
   font-weight: 900;
+  text-align: center;
+  letter-spacing: 1px;
+  box-shadow: 0 8px 30px #0008;
 }
+
+/* BOOST METER */
 
 #boost {
   position: absolute;
-  bottom: 35px;
-  left: 35px;
-  width: 210px;
+  bottom: 27px;
+  left: 28px;
   z-index: 5;
+  width: 220px;
+  padding: 15px 17px;
+  border: 1px solid #ffffff24;
+  border-radius: 12px;
+  background: var(--panel);
+  backdrop-filter: blur(12px);
   text-align: center;
-  font-weight: bold;
-  text-shadow: 0 2px 5px black;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  box-shadow: 0 8px 30px #0008;
 }
 
 .boost-track {
-  height: 15px;
-  background: #101c2b;
-  border: 2px solid white;
-  border-radius: 20px;
+  height: 13px;
+  margin: 10px 0 7px;
   overflow: hidden;
-  margin: 7px 0;
+  border: 1px solid #ffffff35;
+  border-radius: 20px;
+  background: #081321;
 }
 
 #boostFill {
   width: 100%;
   height: 100%;
-  background: linear-gradient(90deg, #00c8ff, #4dffb5);
-  transition: width 0.1s;
+  border-radius: 20px;
+  background: linear-gradient(90deg, #00aaff, #39ffd0);
+  box-shadow: 0 0 15px #00c8ff;
+  transition: width 0.12s linear;
 }
 
 #boostValue {
-  font-size: 20px;
+  color: #53dfff;
+  font-size: 21px;
 }
+
+/* CONTROL GUIDE */
 
 #controls {
   position: absolute;
-  bottom: 20px;
-  right: 20px;
+  right: 22px;
+  bottom: 25px;
+  z-index: 5;
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 8px;
-  max-width: 470px;
-  z-index: 5;
+  gap: 7px;
+  max-width: 500px;
   pointer-events: none;
 }
 
 #controls span {
-  background: #07111dcc;
-  border: 1px solid #ffffff44;
-  border-radius: 6px;
-  padding: 8px 10px;
-  font-size: 11px;
-  font-weight: bold;
+  padding: 8px 11px;
+  border: 1px solid #ffffff30;
+  border-radius: 7px;
+  background: rgba(5, 15, 30, 0.82);
+  color: #eaf5ff;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  backdrop-filter: blur(8px);
 }
+
+/* GAME MESSAGE AND MENU */
 
 #message {
   position: absolute;
   inset: 0;
+  z-index: 10;
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  background: #020914aa;
-  z-index: 10;
+  padding: 25px;
+  background:
+    radial-gradient(ellipse at center, #102d4cbb 0%, #020711e8 75%);
   text-align: center;
+  backdrop-filter: blur(5px);
 }
 
 #message.hidden {
@@ -140,60 +202,87 @@ canvas {
 }
 
 #message h1 {
-  font-size: clamp(35px, 7vw, 75px);
-  margin: 0 0 10px;
-  color: #43c5ff;
-  text-shadow: 0 0 25px #008cff;
+  margin: 0 0 12px;
+  color: #55caff;
+  font-family: 'Orbitron', sans-serif;
+  font-size: clamp(35px, 7vw, 78px);
+  font-weight: 900;
+  letter-spacing: 3px;
+  text-shadow:
+    0 0 12px #008cff,
+    0 0 35px #008cff88;
+  animation: titleGlow 2s ease-in-out infinite alternate;
 }
 
 #message p {
-  font-size: 18px;
-  margin-bottom: 25px;
+  margin: 0 0 28px;
+  color: #d4eaff;
+  font-size: clamp(16px, 2vw, 22px);
+  font-weight: 700;
+  letter-spacing: 1px;
 }
 
 #playBtn {
-  border: none;
-  padding: 16px 50px;
+  min-width: 210px;
+  padding: 16px 42px;
+  border: 2px solid #8de2ff;
   border-radius: 9px;
-  background: linear-gradient(90deg, #087bff, #00c9ff);
+  background: linear-gradient(110deg, #087bff, #00c9ff);
   color: white;
-  font-size: 22px;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 19px;
   font-weight: 900;
+  letter-spacing: 2px;
   cursor: pointer;
-  box-shadow: 0 5px 25px #008cff77;
+  box-shadow:
+    0 0 15px #008cff99,
+    0 0 40px #008cff55;
+  transition:
+    transform 0.18s ease,
+    filter 0.18s ease,
+    box-shadow 0.18s ease;
 }
 
 #playBtn:hover {
   transform: scale(1.06);
+  filter: brightness(1.2);
+  box-shadow:
+    0 0 22px #008cff,
+    0 0 55px #008cff88;
 }
 
-@media (max-width: 600px) {
-  #controls {
-    right: 8px;
-    bottom: 8px;
-    max-width: 250px;
+#playBtn:active {
+  transform: scale(0.97);
+}
+
+@keyframes titleGlow {
+  from {
+    text-shadow:
+      0 0 12px #008cff,
+      0 0 25px #008cff66;
   }
 
-  #controls span {
-    font-size: 9px;
-    padding: 6px;
+  to {
+    text-shadow:
+      0 0 20px #008cff,
+      0 0 48px #008cffbb;
   }
+}
 
-  #boost {
-    left: 10px;
-    bottom: 15px;
-    width: 130px;
-  }
+/* SMALL SCREENS */
 
+@media (max-width: 700px) {
   #hud {
     top: 10px;
     gap: 5px;
   }
 
   .team {
-    min-width: 75px;
-    padding: 7px;
-    gap: 5px;
+    min-width: 85px;
+    gap: 7px;
+    padding: 8px;
+    font-size: 10px;
+    letter-spacing: 1px;
   }
 
   .team strong {
@@ -201,7 +290,56 @@ canvas {
   }
 
   #timer {
+    min-width: 72px;
+    padding: 9px 7px;
     font-size: 18px;
-    padding: 8px;
+  }
+
+  #boost {
+    bottom: 12px;
+    left: 10px;
+    width: 145px;
+    padding: 10px;
+    font-size: 10px;
+  }
+
+  #boostValue {
+    font-size: 17px;
+  }
+
+  #controls {
+    right: 8px;
+    bottom: 8px;
+    max-width: 235px;
+    gap: 4px;
+  }
+
+  #controls span {
+    padding: 5px 7px;
+    font-size: 8px;
+  }
+
+  #message h1 {
+    letter-spacing: 1px;
+  }
+
+  #playBtn {
+    min-width: 170px;
+    padding: 14px 28px;
+    font-size: 16px;
+  }
+}
+
+@media (max-width: 400px) {
+  #controls {
+    max-width: 190px;
+  }
+
+  #controls span {
+    font-size: 7px;
+  }
+
+  #boost {
+    width: 120px;
   }
 }
