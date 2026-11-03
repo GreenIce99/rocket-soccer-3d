@@ -1,51 +1,42 @@
-
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#07111f" />
   <title>Rocket Soccer 3D</title>
 </head>
 <body>
-  <div id="game">
+  <main id="game">
     <div id="hud">
-      <div class="team blue">
-        <span>BLUE</span>
-        <strong id="blueScore">0</strong>
-      </div>
-
+      <div class="team blue"><span>BLUE</span><strong id="blueScore">0</strong></div>
       <div id="timer">3:00</div>
-
-      <div class="team orange">
-        <strong id="orangeScore">0</strong>
-        <span>ORANGE</span>
-      </div>
+      <div class="team orange"><strong id="orangeScore">0</strong><span>ORANGE</span></div>
     </div>
 
-    <div id="boost">
-      <span>BOOST</span>
-      <div class="boost-track">
-        <div id="boostFill"></div>
-      </div>
-      <strong id="boostValue">100</strong>
-    </div>
+    <button id="soundBtn" class="sound-button" type="button" aria-pressed="true">♫ SOUND ON</button>
 
-    <div id="message">
-      <h1 id="messageTitle">ROCKET SOCCER</h1>
-      <p id="messageSub">Score goals to win!</p>
-      <button id="playBtn">PLAY</button>
+    <div id="boost" class="glass-panel">
+      <div class="boost-heading"><span>BOOST</span><strong id="boostValue">100</strong></div>
+      <div class="boost-track"><div id="boostFill"></div></div>
+      <small>HOLD SHIFT</small>
     </div>
 
     <div id="controls">
-      <span>WASD / ARROWS: DRIVE</span>
-      <span>SHIFT: BOOST</span>
-      <span>SPACE: JUMP</span>
-      <span>C: CAMERA</span>
-      <span>R: RESET</span>
-      <span>ESC: PAUSE</span>
+      <span><b>WASD</b> DRIVE</span><span><b>SHIFT</b> BOOST</span><span><b>SPACE</b> JUMP</span>
+      <span><b>X</b> HANDBRAKE</span><span><b>C</b> CAMERA</span><span><b>R</b> RESET</span><span><b>ESC</b> PAUSE</span>
     </div>
-  </div>
 
+    <div id="message">
+      <div class="menu-card">
+        <div class="eyebrow">ARCADE VEHICLE SOCCER</div>
+        <h1 id="messageTitle">ROCKET<br><span>SOCCER</span></h1>
+        <p id="messageSub">Drive fast. Hit hard. Score goals.</p>
+        <button id="playBtn" type="button">KICK OFF</button>
+        <div class="menu-note">WASD to drive · SHIFT to boost · SPACE to jump</div>
+      </div>
+    </div>
+  </main>
   <script type="module" src="/src/main.js"></script>
 </body>
 </html>
