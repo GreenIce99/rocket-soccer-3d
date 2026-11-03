@@ -1,8 +1,6 @@
 import * as THREE from 'three';
 import './style.css';
 
-// ROCKET SOCCER 3D — rebuilt arcade prototype
-const game = document.getElementById('game');
 const $ = (id) => document.getElementById(id);
 
 const ui = {
@@ -11,50 +9,24 @@ const ui = {
   timer: $('timer'),
   boostFill: $('boostFill'),
   boostValue: $('boostValue'),
-  message: $('message'),
-  messageTitle: $('messageTitle'),
-  messageSub: $('messageSub'),
-  playBtn: $('playBtn'),
-  soundBtn: $('soundBtn')
+  matchStatus: $('matchStatus'),
+  gameMessage: $('gameMessage'),
+  mainMenu: $('mainMenu'),
+  pauseMenu: $('pauseMenu'),
+  endMenu: $('endMenu'),
+  endTitle: $('endTitle'),
+  endScore: $('endScore')
 };
 
-if (!game || Object.values(ui).some((el) => !el)) {
-  throw new Error('Game UI is incomplete. Check index.html.');
-}
-
-const FIELD_X = 47;
-const FIELD_Z = 27;
-const BALL_R = 0.92;
-const MATCH_SECONDS = 180;
-
-const clock = new THREE.Clock();
-const keys = Object.create(null);
-
-let blueScore = 0;
-let orangeScore = 0;
-let timeLeft = MATCH_SECONDS;
-let running = false;
-let paused = false;
-let finished = false;
-let cameraMode = 0;
-let kickoff = 2;
-let goalPause = 0;
-let audio = null;
-let engineOsc = null;
-let engineGain = null;
-let boostOsc = null;
-let boostGain = null;
-let soundEnabled = true;
-
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x071321);
-scene.fog = new THREE.Fog(0x071321, 105, 185);
+scene.background = new THREE.Color(0x07101e);
+scene.fog = new THREE.Fog(0x07101e, 48, 115);
 
 const camera = new THREE.PerspectiveCamera(
-  65,
+  58,
   window.innerWidth / window.innerHeight,
   0.1,
-  260
+  250
 );
 
 const renderer = new THREE.WebGLRenderer({
@@ -63,1123 +35,1062 @@ const renderer = new THREE.WebGLRenderer({
 });
 
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.6));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.8));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.18;
-renderer.domElement.setAttribute('aria-label', 'Rocket Soccer 3D game');
-game.prepend(renderer.domElement);
+renderer.toneMappingExposure = 1.15;
+$('game').prepend(renderer.domElement);
 
-// LIGHTING
-const hemi = new THREE.HemisphereLight(0xb9e4ff, 0x203044, 2.1);
-scene.add(hemi);
+const clock = new THREE.Clock();
 
-const sun = new THREE.DirectionalLight(0xfff4df, 2.5);
-sun.position.set(-28, 48, 24);
+scene.add(new THREE.HemisphereLight(0x9ecbff, 0x26334a, 2.1));
+
+const sun = new THREE.DirectionalLight(0xffffff, 2.5);
+sun.position.set(-12, 28, 18);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
-sun.shadow.camera.left = -62;
-sun.shadow.camera.right = 62;
-sun.shadow.camera.top = 58;
-sun.shadow.camera.bottom = -58;
-sun.shadow.bias = -0.00025;
+sun.shadow.camera.left = -45;
+sun.shadow.camera.right = 45;
+sun.shadow.camera.top = 45;
+sun.shadow.camera.bottom = -45;
 scene.add(sun);
 
-const blueLamp = new THREE.PointLight(0x168fff, 90, 48);
-blueLamp.position.set(-43, 8, 0);
-scene.add(blueLamp);
+const blueLight = new THREE.PointLight(0x168cff, 90, 32);
+blueLight.position.set(-18, 7, 0);
+scene.add(blueLight);
 
-const orangeLamp = new THREE.PointLight(0xff7629, 90, 48);
-orangeLamp.position.set(43, 8, 0);
-scene.add(orangeLamp);
+const orangeLight = new THREE.PointLight(0xff792c, 90, 32);
+orangeLight.position.set(18, 7, 0);
+scene.add(orangeLight);
 
-// MATERIALS
-const mat = (color, roughness = 0.55, metalness = 0, extra = {}) =>
-  new THREE.MeshStandardMaterial({
-    color,
-    roughness,
-    metalness,
-    ...extra
-  });
-
-const mats = {
-  grassA: mat(0x177a42, 0.96),
-  grassB: mat(0x126b39, 0.96),
-  white: mat(0xe9f4fa, 0.65),
-  wall: mat(0x142a40, 0.48, 0.3),
-  dark: mat(0x091421, 0.55, 0.35),
-  metal: mat(0x829db5, 0.3, 0.8),
-  blue: mat(0x087dff, 0.24, 0.55),
-  blueLight: mat(0x66dfff, 0.2, 0.35),
-  orange: mat(0xff7624, 0.25, 0.5),
-  orangeLight: mat(0xffc17a, 0.22, 0.3),
-  tire: mat(0x080d13, 0.9),
-  glass: mat(0x153b57, 0.18, 0.55),
-  ball: mat(0xf1f5f8, 0.28, 0.16),
-  ballDark: mat(0x283b4c, 0.42, 0.18)
+const materials = {
+  field: new THREE.MeshStandardMaterial({ color: 0x17633e, roughness: 0.88 }),
+  dark: new THREE.MeshStandardMaterial({ color: 0x101b2b, roughness: 0.8 }),
+  white: new THREE.MeshStandardMaterial({ color: 0xe9f3ff, roughness: 0.65 }),
+  ball: new THREE.MeshStandardMaterial({ color: 0xf5f7fc, roughness: 0.42 }),
+  black: new THREE.MeshStandardMaterial({ color: 0x172033, roughness: 0.65 })
 };
 
-const addMesh = (parent, geo, material, pos, cast = true) => {
-  const mesh = new THREE.Mesh(geo, material);
-  mesh.position.set(...pos);
-  mesh.castShadow = cast;
+const arena = new THREE.Group();
+scene.add(arena);
+
+function box(parent, w, h, d, material, x, y, z) {
+  const mesh = new THREE.Mesh(
+    new THREE.BoxGeometry(w, h, d),
+    material
+  );
+  mesh.position.set(x, y, z);
+  mesh.castShadow = true;
   mesh.receiveShadow = true;
   parent.add(mesh);
   return mesh;
-};
-
-const box = (parent, w, h, d, material, x, y, z) =>
-  addMesh(
-    parent,
-    new THREE.BoxGeometry(w, h, d),
-    material,
-    [x, y, z]
-  );
-
-// FIELD
-box(scene, 96, 0.8, 56, mats.dark, 0, -0.48, 0);
-
-for (let i = 0; i < 12; i++) {
-  box(
-    scene,
-    8,
-    0.035,
-    54,
-    i % 2 ? mats.grassB : mats.grassA,
-    -44 + i * 8,
-    -0.055,
-    0,
-    false
-  );
 }
 
-const lineMat = new THREE.MeshBasicMaterial({ color: 0xeaf7ff });
-
-const fieldLine = (x, z, w, d) =>
-  addMesh(
-    scene,
-    new THREE.BoxGeometry(w, 0.035, d),
-    lineMat,
-    [x, 0.012, z],
-    false
+function cylinder(parent, radius, length, material, x, y, z, rotationZ = 0) {
+  const mesh = new THREE.Mesh(
+    new THREE.CylinderGeometry(radius, radius, length, 24),
+    material
   );
+  mesh.position.set(x, y, z);
+  mesh.rotation.z = rotationZ;
+  mesh.castShadow = true;
+  parent.add(mesh);
+  return mesh;
+}
 
-fieldLine(0, 0, 0.13, 54);
-fieldLine(0, -27, 94, 0.13);
-fieldLine(0, 27, 94, 0.13);
-fieldLine(-47, 0, 0.13, 54);
-fieldLine(47, 0, 0.13, 54);
+// Stadium floor
+box(arena, 80, 1, 52, materials.dark, 0, -0.75, 0);
+box(arena, 64, 0.35, 40, materials.field, 0, -0.05, 0);
 
-const ring = addMesh(
-  scene,
-  new THREE.RingGeometry(5.6, 5.78, 80),
-  lineMat,
-  [0, 0.025, 0],
-  false
+// Field markings
+const lineMaterial = new THREE.MeshBasicMaterial({ color: 0xc7f4dd });
+box(arena, 0.12, 0.025, 40, lineMaterial, 0, 0.14, 0);
+box(arena, 64, 0.025, 0.12, lineMaterial, 0, 0.14, -20);
+box(arena, 64, 0.025, 0.12, lineMaterial, 0, 0.14, 20);
+
+const centerCircle = new THREE.Mesh(
+  new THREE.TorusGeometry(5, 0.09, 8, 80),
+  lineMaterial
 );
-ring.rotation.x = -Math.PI / 2;
+centerCircle.rotation.x = Math.PI / 2;
+centerCircle.position.y = 0.16;
+arena.add(centerCircle);
 
-addMesh(
-  scene,
-  new THREE.CircleGeometry(0.2, 24),
-  lineMat,
-  [0, 0.03, 0],
-  false
-).rotation.x = -Math.PI / 2;
+// Side walls
+const wallMat = new THREE.MeshStandardMaterial({
+  color: 0x172a42,
+  metalness: 0.25,
+  roughness: 0.65
+});
 
-for (const side of [-1, 1]) {
-  fieldLine(side * 35, 0, 0.12, 17);
-  fieldLine(side * 40, 0, 0.12, 17);
-  fieldLine(side * 37.5, -8, 5, 0.12);
-  fieldLine(side * 37.5, 8, 5, 0.12);
-}
+box(arena, 66, 4, 1, wallMat, 0, 1.7, -20.7);
+box(arena, 66, 4, 1, wallMat, 0, 1.7, 20.7);
+box(arena, 1, 4, 42, wallMat, -32.5, 1.7, 0);
+box(arena, 1, 4, 42, wallMat, 32.5, 1.7, 0);
 
-// STADIUM WALLS
-for (const z of [-28, 28]) {
-  box(scene, 96, 2.2, 1.1, mats.wall, 0, 1.05, z);
+// Stadium stands
+const standMat = new THREE.MeshStandardMaterial({
+  color: 0x243750,
+  roughness: 0.9
+});
 
-  const glass = new THREE.Mesh(
-    new THREE.BoxGeometry(96, 7, 0.22),
-    new THREE.MeshPhysicalMaterial({
-      color: 0x66bfff,
-      roughness: 0.12,
-      metalness: 0.15,
-      transparent: true,
-      opacity: 0.12,
-      side: THREE.DoubleSide
-    })
-  );
+box(arena, 76, 7, 5, standMat, 0, 4.8, -25);
+box(arena, 76, 7, 5, standMat, 0, 4.8, 25);
+box(arena, 5, 7, 48, standMat, -37, 4.8, 0);
+box(arena, 5, 7, 48, standMat, 37, 4.8, 0);
 
-  glass.position.set(0, 5.6, z);
-  scene.add(glass);
-}
-
-// STANDS
-for (const zSide of [-1, 1]) {
-  box(scene, 108, 10, 13, mats.dark, 0, 5, zSide * 39);
-
-  for (let row = 0; row < 4; row++) {
-    for (let col = 0; col < 36; col++) {
-      const seatMat = col < 18 ? mats.blue : mats.orange;
-
-      const seat = box(
-        scene,
-        1.85,
-        0.45,
-        0.85,
-        seatMat,
-        -46 + col * 2.65,
-        1.1 + row * 1.55,
-        zSide * (32 + row * 2.35)
-      );
-
-      seat.castShadow = false;
-    }
+// Stadium lights
+for (const x of [-27, -9, 9, 27]) {
+  for (const z of [-25, 25]) {
+    const poleMat = new THREE.MeshStandardMaterial({ color: 0x52647b, metalness: 0.7 });
+    cylinder(arena, 0.16, 10, poleMat, x, 8, z);
+    const lamp = new THREE.PointLight(0xffffff, 75, 28);
+    lamp.position.set(x, 13, z);
+    scene.add(lamp);
+    box(arena, 1.8, 0.25, 0.7, materials.white, x, 13, z);
   }
 }
 
-// ROOF AND FLOODLIGHTS
-for (let x = -42; x <= 42; x += 14) {
-  box(scene, 0.55, 0.55, 88, mats.metal, x, 17, 0);
-}
-
-for (const x of [-38, -13, 13, 38]) {
-  for (const z of [-36, 36]) {
-    addMesh(
-      scene,
-      new THREE.CylinderGeometry(0.2, 0.32, 14, 10),
-      mats.metal,
-      [x, 7, z]
-    );
-
-    box(scene, 4, 0.55, 1.5, mats.white, x, 14.3, z);
-
-    const light = new THREE.PointLight(0xd7f1ff, 30, 56);
-    light.position.set(x, 13.5, z);
-    scene.add(light);
-  }
-}
-
-// GOALS
-for (const x of [-48, 48]) {
-  for (const z of [-19, 19]) {
-    box(scene, 1.2, 8, 16, mats.wall, x, 4, z);
-  }
-}
-
-function createGoal(x, color, inward) {
+// Goals at the ends of the field
+function createGoal(x, color) {
   const group = new THREE.Group();
-  group.position.set(x, 0, 0);
-  scene.add(group);
+  arena.add(group);
 
-  const frameMat = mat(color, 0.22, 0.65);
-
-  const post = (w, h, d, px, py, pz) =>
-    box(group, w, h, d, frameMat, px, py, pz);
-
-  post(0.65, 7, 0.65, 0, 3.5, -7);
-  post(0.65, 7, 0.65, 0, 3.5, 7);
-  post(0.65, 0.65, 14, 0, 7, 0);
-
-  const netMat = new THREE.LineBasicMaterial({
+  const frameMat = new THREE.MeshStandardMaterial({
     color,
-    transparent: true,
-    opacity: 0.35
+    metalness: 0.5,
+    roughness: 0.35,
+    emissive: color,
+    emissiveIntensity: 0.3
   });
 
-  for (let y = 1; y < 7; y += 1.2) {
-    const geometry = new THREE.BufferGeometry().setFromPoints([
-      new THREE.Vector3(0, y, -7),
-      new THREE.Vector3(inward * 5, y, -7),
-      new THREE.Vector3(inward * 5, y, 7),
-      new THREE.Vector3(0, y, 7)
-    ]);
+  const goalX = x < 0 ? -34 : 34;
+  const direction = x < 0 ? 1 : -1;
 
-    group.add(new THREE.Line(geometry, netMat));
-  }
+  box(group, 0.55, 5, 13, frameMat, goalX, 2.4, 0);
+  box(group, 4.5, 0.55, 13, frameMat, goalX + direction * 2, 5, 0);
+  box(group, 4.5, 5, 0.45, frameMat, goalX + direction * 2, 2.4, -6.3);
+  box(group, 4.5, 5, 0.45, frameMat, goalX + direction * 2, 2.4, 6.3);
 
-  for (let z = -7; z <= 7; z += 1.4) {
-    const geometry = new THREE.BufferGeometry().setFromPoints([
-      new THREE.Vector3(0, 0.5, z),
-      new THREE.Vector3(inward * 5, 0.5, z),
-      new THREE.Vector3(inward * 5, 7, z)
-    ]);
+  const netMat = new THREE.MeshBasicMaterial({
+    color,
+    transparent: true,
+    opacity: 0.13,
+    wireframe: true
+  });
 
-    group.add(new THREE.Line(geometry, netMat));
-  }
-
-  const aura = new THREE.Mesh(
-    new THREE.PlaneGeometry(13, 8),
-    new THREE.MeshBasicMaterial({
-      color,
-      transparent: true,
-      opacity: 0.08,
-      side: THREE.DoubleSide
-    })
-  );
-
-  aura.position.set(inward * 2.5, 4, 0);
-  aura.rotation.y = Math.PI / 2;
-  group.add(aura);
+  const net = new THREE.Mesh(new THREE.BoxGeometry(4, 4.5, 12), netMat);
+  net.position.set(goalX + direction * 2, 2.4, 0);
+  group.add(net);
 
   return group;
 }
 
-createGoal(-47, 0x25aaff, 1);
-createGoal(47, 0xff852f, -1);
+createGoal(-1, 0x168cff);
+createGoal(1, 0xff792c);
 
-// CARS
-function createCar(color, highlight, isPlayer) {
+// Goal line indicators
+for (const x of [-32, 32]) {
+  box(arena, 0.15, 0.035, 13, materials.white, x, 0.17, 0);
+}
+
+// Ball
+const ballGroup = new THREE.Group();
+scene.add(ballGroup);
+
+const ball = new THREE.Mesh(
+  new THREE.SphereGeometry(1.15, 32, 24),
+  materials.ball
+);
+ball.castShadow = true;
+ball.receiveShadow = true;
+ballGroup.add(ball);
+
+const patchMat = new THREE.MeshStandardMaterial({ color: 0x26334a, roughness: 0.7 });
+
+for (let i = 0; i < 5; i++) {
+  const patch = new THREE.Mesh(
+    new THREE.SphereGeometry(0.36, 5, 5),
+    patchMat
+  );
+  const angle = (i / 5) * Math.PI * 2;
+  patch.position.set(Math.cos(angle) * 0.84, 0.15, Math.sin(angle) * 0.84);
+  patch.scale.set(1, 0.8, 0.35);
+  patch.lookAt(0, 0, 0);
+  ballGroup.add(patch);
+}
+
+let ballVelocity = new THREE.Vector3();
+ballGroup.position.set(0, 1.2, 0);
+
+// Cars
+const playerColor = new THREE.Color(0x168cff);
+
+function createCar(color) {
   const root = new THREE.Group();
   scene.add(root);
 
-  const bodyMat = mat(color, 0.22, 0.55);
-  const trimMat = mat(highlight, 0.2, 0.45);
-  const windowMat = mat(0x16364e, 0.16, 0.6, {
-    transparent: true,
-    opacity: 0.94
+  const paint = new THREE.MeshStandardMaterial({
+    color,
+    metalness: 0.5,
+    roughness: 0.3
   });
 
-  box(root, 2.45, 0.72, 3.65, bodyMat, 0, 0.72, 0);
-  box(root, 2.05, 0.52, 1.55, bodyMat, 0, 1.25, 0.25);
-  box(root, 2.12, 0.24, 1.05, trimMat, 0, 1.12, -1.08);
-  box(root, 1.72, 0.08, 1.15, windowMat, 0, 1.58, 0.22);
-  box(root, 2.25, 0.13, 0.22, trimMat, 0, 0.97, -1.78);
-  box(root, 2.35, 0.16, 0.24, mats.dark, 0, 0.47, 1.72);
+  const darkPaint = new THREE.MeshStandardMaterial({
+    color: 0x101827,
+    metalness: 0.25,
+    roughness: 0.5
+  });
 
-  for (const s of [-1, 1]) {
-    box(root, 0.13, 0.25, 2.55, mats.dark, s * 1.18, 0.47, 0);
+  const glass = new THREE.MeshStandardMaterial({
+    color: 0x142c43,
+    metalness: 0.65,
+    roughness: 0.15
+  });
 
-    for (const z of [-1.15, 1.15]) {
-      const wheel = addMesh(
-        root,
+  box(root, 2.5, 0.65, 4.1, paint, 0, 0.85, 0);
+  box(root, 1.9, 0.8, 2.0, glass, 0, 1.45, -0.25);
+  box(root, 2.35, 0.18, 0.65, darkPaint, 0, 0.65, -1.7);
+  box(root, 2.1, 0.12, 0.6, darkPaint, 0, 1.35, 1.55);
+
+  const wheels = [];
+  const wheelMat = new THREE.MeshStandardMaterial({
+    color: 0x111722,
+    roughness: 0.8
+  });
+
+  const rimMat = new THREE.MeshStandardMaterial({
+    color: 0x9aadc2,
+    metalness: 0.8,
+    roughness: 0.3
+  });
+
+  for (const x of [-1.2, 1.2]) {
+    for (const z of [-1.25, 1.25]) {
+      const wheel = new THREE.Mesh(
         new THREE.CylinderGeometry(0.48, 0.48, 0.32, 20),
-        mats.tire,
-        [s * 1.18, 0.48, z]
+        wheelMat
       );
-
       wheel.rotation.z = Math.PI / 2;
+      wheel.position.set(x, 0.5, z);
+      wheel.castShadow = true;
+      root.add(wheel);
+      wheels.push(wheel);
 
-      const hub = addMesh(
-        root,
+      const rim = new THREE.Mesh(
         new THREE.CylinderGeometry(0.22, 0.22, 0.34, 16),
-        trimMat,
-        [s * 1.18, 0.48, z]
+        rimMat
       );
-
-      hub.rotation.z = Math.PI / 2;
+      rim.rotation.z = Math.PI / 2;
+      rim.position.copy(wheel.position);
+      root.add(rim);
     }
-
-    addMesh(
-      root,
-      new THREE.BoxGeometry(0.55, 0.13, 0.08),
-      new THREE.MeshBasicMaterial({ color: 0xc9f5ff }),
-      [s * 0.72, 0.93, -1.83],
-      false
-    );
-
-    addMesh(
-      root,
-      new THREE.BoxGeometry(0.55, 0.12, 0.08),
-      new THREE.MeshBasicMaterial({ color: 0xff302c }),
-      [s * 0.72, 0.92, 1.84],
-      false
-    );
   }
 
-  box(root, 0.16, 0.045, 2.25, trimMat, 0, 1.48, 0.05);
-  box(root, 2.2, 0.12, 0.28, mats.dark, 0, 1.35, 1.78);
+  const headMat = new THREE.MeshBasicMaterial({ color: 0xdaf4ff });
+  for (const x of [-0.85, 0.85]) {
+    const head = new THREE.Mesh(
+      new THREE.BoxGeometry(0.45, 0.16, 0.12),
+      headMat
+    );
+    head.position.set(x, 0.92, -2.07);
+    root.add(head);
+  }
 
-  const exhaust = new THREE.PointLight(highlight, 0, 5);
-  exhaust.position.set(0, 0.8, 2.15);
-  root.add(exhaust);
+  const tailMat = new THREE.MeshBasicMaterial({ color: 0xff392f });
+  for (const x of [-0.85, 0.85]) {
+    const tail = new THREE.Mesh(
+      new THREE.BoxGeometry(0.4, 0.13, 0.12),
+      tailMat
+    );
+    tail.position.set(x, 0.92, 2.07);
+    root.add(tail);
+  }
+
+  const flameMat = new THREE.MeshBasicMaterial({
+    color: 0x55caff,
+    transparent: true,
+    opacity: 0.9
+  });
 
   const flame = new THREE.Mesh(
-    new THREE.ConeGeometry(0.34, 0.9, 12),
-    new THREE.MeshBasicMaterial({
-      color: highlight,
-      transparent: true,
-      opacity: 0.85
-    })
+    new THREE.ConeGeometry(0.38, 1.5, 12),
+    flameMat
   );
-
   flame.rotation.x = -Math.PI / 2;
-  flame.position.set(0, 0.8, 2.55);
+  flame.position.set(0, 0.8, 2.65);
   flame.visible = false;
   root.add(flame);
 
+  const underglow = new THREE.PointLight(color, 14, 5);
+  underglow.position.set(0, 0.35, 0);
+  root.add(underglow);
+
   root.userData = {
-    exhaust,
+    wheels,
     flame,
-    isPlayer,
-    bodyMat,
-    trimMat
-  };
-
-  return {
-    root,
-    velocity: new THREE.Vector3(),
-    yaw: isPlayer ? -Math.PI / 2 : Math.PI / 2,
-    boost: 100,
-    vertical: 0,
+    speed: 0,
+    verticalSpeed: 0,
     grounded: true,
-    wheelSpin: 0
+    boost: 100,
+    velocity: new THREE.Vector3(),
+    yaw: 0,
+    underglow
   };
+
+  return root;
 }
 
-const player = createCar(0x087dff, 0x72e8ff, true);
-const rival = createCar(0xff7624, 0xffc078, false);
+const player = createCar(0x168cff);
+const rival = createCar(0xff792c);
 
-// BALL
-const ball = new THREE.Group();
-scene.add(ball);
+player.position.set(-13, 0, 0);
+rival.position.set(13, 0, 0);
+player.userData.yaw = -Math.PI / 2;
+rival.userData.yaw = Math.PI / 2;
+player.rotation.y = player.userData.yaw;
+rival.rotation.y = rival.userData.yaw;
 
-addMesh(
-  ball,
-  new THREE.SphereGeometry(BALL_R, 32, 24),
-  mats.ball,
-  [0, 0, 0]
-);
-
-for (let i = 0; i < 12; i++) {
-  const phi = Math.acos(1 - 2 * (i + 0.5) / 12);
-  const theta = Math.PI * (1 + Math.sqrt(5)) * i;
-
-  const v = new THREE.Vector3(
-    Math.cos(theta) * Math.sin(phi),
-    Math.cos(phi),
-    Math.sin(theta) * Math.sin(phi)
-  );
-
-  const patch = addMesh(
-    ball,
-    new THREE.CircleGeometry(0.23, 5),
-    mats.ballDark,
-    [v.x * 0.91, v.y * 0.91, v.z * 0.91],
-    false
-  );
-
-  patch.quaternion.setFromUnitVectors(
-    new THREE.Vector3(0, 0, 1),
-    v
-  );
+function setPlayerColor(color) {
+  player.traverse((obj) => {
+    if (obj.isMesh && obj.material && obj.material.color) {
+      if (obj.material.metalness > 0.3 && obj.material.color.getHex() !== 0x9aadc2) {
+        obj.material.color.set(color);
+      }
+    }
+  });
+  player.userData.underglow.color.set(color);
 }
 
-const ballVel = new THREE.Vector3();
+// Input
+const keys = {};
+let gameState = 'menu';
+let timeLeft = 180;
+let blueScore = 0;
+let orangeScore = 0;
+let countdown = 0;
+let cameraMode = 0;
+let selectedColor = '#168cff';
 
-// STADIUM ACCENTS
-for (let x = -44; x <= 44; x += 4) {
-  const p = box(
-    scene,
-    0.08,
-    0.12,
-    0.2,
-    x % 8 === 0 ? mats.blueLight : mats.orangeLight,
-    x,
-    0.08,
-    -27.45
-  );
+window.addEventListener('keydown', (event) => {
+  const key = event.key.toLowerCase();
+  keys[key] = true;
 
-  p.castShadow = false;
+  if ([' ', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(key)) {
+    event.preventDefault();
+  }
+
+  if (key === 'escape') {
+    if (gameState === 'playing') pauseGame();
+    else if (gameState === 'paused') resumeGame();
+  }
+
+  if (key === 'c') cameraMode = (cameraMode + 1) % 2;
+  if (key === 'r' && gameState === 'playing') resetPositions();
+  if (key === 'e' && gameState === 'playing') jump(player);
+});
+
+window.addEventListener('keyup', (event) => {
+  keys[event.key.toLowerCase()] = false;
+});
+
+function jump(car) {
+  const data = car.userData;
+  if (data.grounded) {
+    data.verticalSpeed = 8.5;
+    data.grounded = false;
+    sound.jump();
+  }
 }
 
-// SOUND SYSTEM
-function initAudio() {
-  if (audio) {
-    if (audio.state === 'suspended') audio.resume();
+// Audio system
+let audioContext = null;
+let masterGain = null;
+let effectsGain = null;
+let musicGain = null;
+let engineOsc = null;
+let engineGain = null;
+let audioStarted = false;
+let soundEnabled = true;
+let musicOscillators = [];
+let musicTimer = 0;
+
+const volume = {
+  master: 0.7,
+  music: 0.35,
+  effects: 0.85
+};
+
+function startAudio() {
+  if (audioStarted) {
+    if (audioContext && audioContext.state === 'suspended') audioContext.resume();
     return;
   }
 
-  const AudioContextClass =
-    window.AudioContext || window.webkitAudioContext;
+  const AudioCtx = window.AudioContext || window.webkitAudioContext;
+  if (!AudioCtx) return;
 
-  if (!AudioContextClass) return;
+  audioContext = new AudioCtx();
+  masterGain = audioContext.createGain();
+  effectsGain = audioContext.createGain();
+  musicGain = audioContext.createGain();
 
-  audio = new AudioContextClass();
+  masterGain.gain.value = volume.master;
+  effectsGain.gain.value = volume.effects;
+  musicGain.gain.value = volume.music;
 
-  engineOsc = audio.createOscillator();
+  effectsGain.connect(masterGain);
+  musicGain.connect(masterGain);
+  masterGain.connect(audioContext.destination);
+
+  engineOsc = audioContext.createOscillator();
   engineOsc.type = 'sawtooth';
-
-  engineGain = audio.createGain();
+  engineGain = audioContext.createGain();
   engineGain.gain.value = 0;
-
-  const engineFilter = audio.createBiquadFilter();
-  engineFilter.type = 'lowpass';
-  engineFilter.frequency.value = 380;
-
-  engineOsc
-    .connect(engineFilter)
-    .connect(engineGain)
-    .connect(audio.destination);
-
+  engineOsc.connect(engineGain);
+  engineGain.connect(effectsGain);
   engineOsc.start();
 
-  boostOsc = audio.createOscillator();
-  boostOsc.type = 'triangle';
-
-  boostGain = audio.createGain();
-  boostGain.gain.value = 0;
-
-  boostOsc.connect(boostGain).connect(audio.destination);
-  boostOsc.start();
+  audioStarted = true;
+  startMenuMusic();
 }
 
-function tone(
-  freq = 440,
-  duration = 0.12,
-  type = 'sine',
-  volume = 0.12,
-  slide = 0
-) {
-  if (!soundEnabled || !audio) return;
+function updateAudioVolumes() {
+  if (!audioStarted) return;
+  const now = audioContext.currentTime;
+  masterGain.gain.setTargetAtTime(soundEnabled ? volume.master : 0, now, 0.05);
+  musicGain.gain.setTargetAtTime(volume.music, now, 0.05);
+  effectsGain.gain.setTargetAtTime(volume.effects, now, 0.05);
+}
 
-  const oscillator = audio.createOscillator();
-  const gain = audio.createGain();
-  const now = audio.currentTime;
+function tone(frequency, duration, type = 'sine', gain = 0.2, endFrequency = null) {
+  if (!audioStarted || !soundEnabled) return;
 
-  oscillator.type = type;
-  oscillator.frequency.setValueAtTime(freq, now);
+  const now = audioContext.currentTime;
+  const osc = audioContext.createOscillator();
+  const amp = audioContext.createGain();
 
-  if (slide) {
-    oscillator.frequency.exponentialRampToValueAtTime(
-      Math.max(30, freq + slide),
-      now + duration
-    );
+  osc.type = type;
+  osc.frequency.setValueAtTime(frequency, now);
+  if (endFrequency) {
+    osc.frequency.exponentialRampToValueAtTime(Math.max(1, endFrequency), now + duration);
   }
 
-  gain.gain.setValueAtTime(volume, now);
-  gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+  amp.gain.setValueAtTime(0.0001, now);
+  amp.gain.exponentialRampToValueAtTime(gain, now + 0.015);
+  amp.gain.exponentialRampToValueAtTime(0.0001, now + duration);
 
-  oscillator.connect(gain).connect(audio.destination);
-  oscillator.start(now);
-  oscillator.stop(now + duration + 0.02);
+  osc.connect(amp);
+  amp.connect(effectsGain);
+  osc.start(now);
+  osc.stop(now + duration + 0.03);
 }
 
-function impactSound(power = 1) {
-  tone(
-    115 + Math.min(power, 12) * 18,
-    0.16,
-    'triangle',
-    Math.min(0.22, 0.07 + power * 0.01),
-    -65
-  );
+function noiseBurst(duration, gain, frequency = 900) {
+  if (!audioStarted || !soundEnabled) return;
+
+  const length = Math.floor(audioContext.sampleRate * duration);
+  const buffer = audioContext.createBuffer(1, length, audioContext.sampleRate);
+  const data = buffer.getChannelData(0);
+
+  for (let i = 0; i < length; i++) {
+    data[i] = (Math.random() * 2 - 1) * (1 - i / length);
+  }
+
+  const source = audioContext.createBufferSource();
+  const filter = audioContext.createBiquadFilter();
+  const amp = audioContext.createGain();
+
+  source.buffer = buffer;
+  filter.type = 'lowpass';
+  filter.frequency.value = frequency;
+  amp.gain.setValueAtTime(gain, audioContext.currentTime);
+  amp.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + duration);
+
+  source.connect(filter);
+  filter.connect(amp);
+  amp.connect(effectsGain);
+  source.start();
 }
 
-function goalSound() {
-  tone(440, 0.22, 'sine', 0.16, 220);
-
-  setTimeout(() => {
-    tone(660, 0.25, 'sine', 0.15, 180);
-  }, 130);
-
-  setTimeout(() => {
-    tone(880, 0.4, 'sine', 0.13, 120);
-  }, 280);
+function stopMusic() {
+  for (const osc of musicOscillators) {
+    try { osc.stop(); } catch {}
+  }
+  musicOscillators = [];
 }
 
-function updateAudio(speed, boosting) {
-  if (!audio || !soundEnabled) return;
+function playMusicNote(frequency, start, duration, gain = 0.035) {
+  if (!audioStarted) return;
 
-  const now = audio.currentTime;
+  const osc = audioContext.createOscillator();
+  const amp = audioContext.createGain();
 
-  engineOsc.frequency.setTargetAtTime(
-    58 + Math.abs(speed) * 10,
-    now,
-    0.08
-  );
+  osc.type = 'triangle';
+  osc.frequency.value = frequency;
+  amp.gain.setValueAtTime(0.0001, start);
+  amp.gain.linearRampToValueAtTime(gain, start + 0.04);
+  amp.gain.exponentialRampToValueAtTime(0.0001, start + duration);
 
-  engineGain.gain.setTargetAtTime(
-    running && !paused
-      ? 0.025 + Math.min(Math.abs(speed) / 45, 0.045)
-      : 0,
-    now,
-    0.08
-  );
-
-  boostOsc.frequency.setTargetAtTime(
-    85 + Math.abs(speed) * 5,
-    now,
-    0.05
-  );
-
-  boostGain.gain.setTargetAtTime(
-    boosting ? 0.035 : 0,
-    now,
-    0.06
-  );
+  osc.connect(amp);
+  amp.connect(musicGain);
+  osc.start(start);
+  osc.stop(start + duration + 0.02);
+  musicOscillators.push(osc);
 }
 
-// GAME RESET
+function startMenuMusic() {
+  if (!audioStarted) return;
+  stopMusic();
+
+  const notes = [110, 164.81, 220, 164.81, 130.81, 196, 261.63, 196];
+  let index = 0;
+
+  function loop() {
+    if (!audioStarted) return;
+
+    if (gameState === 'menu' || gameState === 'paused') {
+      const now = audioContext.currentTime;
+      playMusicNote(notes[index % notes.length], now, 0.8, 0.025);
+      playMusicNote(notes[(index + 2) % notes.length] * 2, now + 0.18, 0.45, 0.012);
+      index++;
+    }
+
+    musicTimer = window.setTimeout(loop, 650);
+  }
+
+  loop();
+}
+
+const sound = {
+  click() {
+    tone(600, 0.08, 'sine', 0.1, 850);
+  },
+  boost() {
+    tone(90, 0.4, 'sawtooth', 0.12, 380);
+    noiseBurst(0.22, 0.08, 1200);
+  },
+  jump() {
+    tone(180, 0.25, 'triangle', 0.16, 520);
+  },
+  hit() {
+    tone(95, 0.16, 'sine', 0.22, 42);
+    noiseBurst(0.12, 0.17, 650);
+  },
+  goal() {
+    tone(330, 0.5, 'sawtooth', 0.14, 660);
+    setTimeout(() => tone(440, 0.6, 'sawtooth', 0.14, 880), 160);
+    setTimeout(() => tone(660, 0.8, 'triangle', 0.12, 990), 320);
+  },
+  brake() {
+    noiseBurst(0.14, 0.04, 450);
+  },
+  countdown() {
+    tone(500, 0.12, 'sine', 0.13);
+  },
+  kickoff() {
+    tone(500, 0.22, 'triangle', 0.16, 900);
+  }
+};
+
+// Update engine sound
+function updateEngineSound() {
+  if (!audioStarted || !engineOsc || !engineGain) return;
+
+  const speed = Math.abs(player.userData.speed);
+  const boostOn = keys.shift && player.userData.boost > 0 && gameState === 'playing';
+  const frequency = 48 + speed * 5 + (boostOn ? 45 : 0);
+  const now = audioContext.currentTime;
+
+  engineOsc.frequency.setTargetAtTime(frequency, now, 0.08);
+  const target = gameState === 'playing' ? 0.025 + speed * 0.002 + (boostOn ? 0.045 : 0) : 0;
+  engineGain.gain.setTargetAtTime(target, now, 0.1);
+}
+
+const soundToggle = $('soundToggle');
+
+soundToggle.addEventListener('click', () => {
+  startAudio();
+  soundEnabled = !soundEnabled;
+  soundToggle.textContent = soundEnabled ? 'SOUND: ON' : 'SOUND: OFF';
+  updateAudioVolumes();
+  if (soundEnabled) sound.click();
+});
+
+$('masterVolume').addEventListener('input', (e) => {
+  volume.master = Number(e.target.value) / 100;
+  $('masterLabel').textContent = e.target.value + '%';
+  updateAudioVolumes();
+});
+
+$('musicVolume').addEventListener('input', (e) => {
+  volume.music = Number(e.target.value) / 100;
+  $('musicLabel').textContent = e.target.value + '%';
+  updateAudioVolumes();
+});
+
+$('effectsVolume').addEventListener('input', (e) => {
+  volume.effects = Number(e.target.value) / 100;
+  $('effectsLabel').textContent = e.target.value + '%';
+  updateAudioVolumes();
+});
+
+// Game state
+function updateScore() {
+  ui.blueScore.textContent = blueScore;
+  ui.orangeScore.textContent = orangeScore;
+}
+
 function resetPositions() {
-  player.root.position.set(-12, 0.05, 0);
-  player.yaw = -Math.PI / 2;
-  player.velocity.set(0, 0, 0);
-  player.vertical = 0;
-  player.grounded = true;
-  player.boost = 100;
+  player.position.set(-13, 0, 0);
+  rival.position.set(13, 0, 0);
 
-  rival.root.position.set(12, 0.05, 0);
-  rival.yaw = Math.PI / 2;
-  rival.velocity.set(0, 0, 0);
-  rival.vertical = 0;
-  rival.grounded = true;
+  player.userData.yaw = -Math.PI / 2;
+  rival.userData.yaw = Math.PI / 2;
 
-  ball.position.set(0, BALL_R, 0);
-  ballVel.set(0, 0, 0);
+  for (const car of [player, rival]) {
+    car.rotation.y = car.userData.yaw;
+    car.userData.speed = 0;
+    car.userData.verticalSpeed = 0;
+    car.userData.velocity.set(0, 0, 0);
+    car.userData.grounded = true;
+    car.userData.flame.visible = false;
+  }
 
-  kickoff = 2;
-  goalPause = 0;
+  ballGroup.position.set(0, 1.2, 0);
+  ballVelocity.set(0, 0, 0);
 }
 
-resetPositions();
+function startMatch() {
+  startAudio();
+  sound.click();
 
-const forwardOf = (yaw) =>
-  new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
+  blueScore = 0;
+  orangeScore = 0;
+  timeLeft = 180;
+  updateScore();
+  resetPositions();
 
-const clamp = (v, a, b) =>
-  Math.max(a, Math.min(b, v));
+  gameState = 'playing';
+  ui.mainMenu.classList.add('hidden');
+  ui.pauseMenu.classList.add('hidden');
+  ui.endMenu.classList.add('hidden');
+  $('hud').classList.add('visible');
+  $('boostPanel').classList.add('visible');
+  $('gameControls').classList.add('visible');
 
-const wrapAngle = (a) =>
-  Math.atan2(Math.sin(a), Math.cos(a));
+  ui.matchStatus.textContent = 'KICKOFF';
+  countdown = 2.5;
+  ui.gameMessage.textContent = 'GET READY!';
+  startMenuMusic();
+}
 
-// CAR PHYSICS
-function updateCar(car, dt, controls, ai = false) {
-  const forward = forwardOf(car.yaw);
-  let speed = car.velocity.dot(forward);
+function pauseGame() {
+  gameState = 'paused';
+  ui.pauseMenu.classList.remove('hidden');
+  ui.matchStatus.textContent = 'PAUSED';
+  startMenuMusic();
+}
 
-  const steer = controls.steer || 0;
-  const throttle = controls.throttle || 0;
-  const handbrake = !!controls.handbrake;
+function resumeGame() {
+  gameState = 'playing';
+  ui.pauseMenu.classList.add('hidden');
+  ui.matchStatus.textContent = 'IN PLAY';
+  sound.click();
+}
 
-  const boosting =
-    !!controls.boost &&
-    car.boost > 0 &&
-    throttle > 0;
+function returnToMenu() {
+  gameState = 'menu';
+  ui.mainMenu.classList.remove('hidden');
+  ui.pauseMenu.classList.add('hidden');
+  ui.endMenu.classList.add('hidden');
+  $('hud').classList.remove('visible');
+  $('boostPanel').classList.remove('visible');
+  $('gameControls').classList.remove('visible');
+  ui.gameMessage.textContent = '';
+  resetPositions();
+  startMenuMusic();
+}
 
-  const maxSpeed = boosting ? 39 : 25;
-  const acceleration = boosting ? 34 : 23;
+function finishMatch() {
+  gameState = 'ended';
+  ui.endMenu.classList.remove('hidden');
+  ui.endTitle.textContent = blueScore > orangeScore
+    ? 'BLUE WINS!'
+    : blueScore < orangeScore
+      ? 'ORANGE WINS!'
+      : 'IT’S A DRAW!';
+  ui.endScore.textContent = `${blueScore} - ${orangeScore}`;
+  startMenuMusic();
+}
 
-  if (throttle !== 0) {
-    speed += throttle * acceleration * dt;
+function scoreGoal(team) {
+  if (gameState !== 'playing' || countdown > 0) return;
+
+  if (team === 'blue') blueScore++;
+  else orangeScore++;
+
+  updateScore();
+  sound.goal();
+  ui.gameMessage.textContent = team === 'blue' ? 'BLUE SCORES!' : 'ORANGE SCORES!';
+
+  gameState = 'goal';
+  setTimeout(() => {
+    if (gameState !== 'goal') return;
+    resetPositions();
+    ui.gameMessage.textContent = '';
+    gameState = 'playing';
+    countdown = 1.5;
+  }, 1800);
+}
+
+// Physics helpers
+const forward = new THREE.Vector3();
+const right = new THREE.Vector3();
+
+function getForward(yaw) {
+  return new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
+}
+
+function updateCar(car, isPlayer, dt) {
+  const data = car.userData;
+
+  let throttle = 0;
+  let steer = 0;
+  let braking = false;
+  let boosting = false;
+
+  if (isPlayer) {
+    if (keys.w || keys.arrowup) throttle = 1;
+    if (keys.s || keys.arrowdown) throttle = -1;
+    if (keys.a || keys.arrowleft) steer = 1;
+    if (keys.d || keys.arrowright) steer = -1;
+    braking = !!keys[' '];
+    boosting = !!keys.shift && data.boost > 0;
   } else {
-    speed *= Math.exp(-1.0 * dt);
+    const targetX = ballGroup.position.x + 3.5;
+    const targetZ = ballGroup.position.z * 0.85;
+    const dx = targetX - car.position.x;
+    const dz = targetZ - car.position.z;
+    const desiredYaw = Math.atan2(-dx, -dz);
+
+    let difference = desiredYaw - data.yaw;
+    difference = Math.atan2(Math.sin(difference), Math.cos(difference));
+
+    steer = THREE.MathUtils.clamp(difference * 2.1, -1, 1);
+    throttle = Math.abs(difference) > 2.2 ? 0.35 : 1;
+    boosting = Math.abs(difference) < 0.55 && data.boost > 15;
   }
 
-  speed = clamp(speed, -12, maxSpeed);
+  const speed = data.speed;
+  const absSpeed = Math.abs(speed);
 
-  const turnStrength =
-    (0.65 + Math.min(Math.abs(speed) / 14, 1.15)) *
-    (handbrake ? 1.55 : 1);
+  // Steering becomes more responsive as the car moves.
+  const steeringStrength = 1.45 * THREE.MathUtils.clamp(absSpeed / 5, 0.22, 1);
+  data.yaw += steer * steeringStrength * Math.sign(speed || 1) * dt;
+  car.rotation.y = data.yaw;
 
-  car.yaw = wrapAngle(
-    car.yaw +
-    steer *
-    turnStrength *
-    dt *
-    (speed < -0.5 ? -1 : 1)
-  );
+  const facing = getForward(data.yaw);
+  const side = new THREE.Vector3(-facing.z, 0, facing.x);
 
-  const newForward = forwardOf(car.yaw);
-
-  // Strong tire grip: lateral movement is removed quickly.
-  const longitudinal = newForward
-    .clone()
-    .multiplyScalar(car.velocity.dot(newForward));
-
-  const lateral = car.velocity.clone().sub(longitudinal);
-
-  lateral.multiplyScalar(
-    Math.exp(-(handbrake ? 2.8 : 13.5) * dt)
-  );
-
-  car.velocity.copy(longitudinal.add(lateral));
-
-  car.velocity.addScaledVector(
-    newForward,
-    (speed - car.velocity.dot(newForward)) *
-    Math.min(1, dt * 10)
-  );
-
-  if (boosting) {
-    car.boost = Math.max(0, car.boost - 34 * dt);
-    car.velocity.addScaledVector(newForward, 17 * dt);
-  } else if (!ai) {
-    car.boost = Math.min(100, car.boost + 11 * dt);
-  }
-
-  car.root.position.addScaledVector(car.velocity, dt);
-
-  car.root.position.x = clamp(car.root.position.x, -44.5, 44.5);
-  car.root.position.z = clamp(car.root.position.z, -24.5, 24.5);
-
-  if (controls.jump && car.grounded) {
-    car.vertical = 8.3;
-    car.grounded = false;
-
-    if (!ai) {
-      tone(240, 0.12, 'sine', 0.08, 120);
+  // Strong, predictable acceleration and reverse.
+  if (throttle > 0) {
+    data.speed += 25 * dt;
+  } else if (throttle < 0) {
+    if (data.speed > 1) {
+      data.speed -= 42 * dt;
+    } else {
+      data.speed -= 17 * dt;
     }
   }
 
-  car.vertical -= 22 * dt;
-  car.root.position.y += car.vertical * dt;
-
-  if (car.root.position.y < 0.05) {
-    car.root.position.y = 0.05;
-    car.vertical = 0;
-    car.grounded = true;
+  // Dedicated brake: rapidly removes speed, even from high speed.
+  if (braking) {
+    data.speed *= Math.exp(-9.5 * dt);
+    if (Math.abs(data.speed) < 0.7) data.speed = 0;
+    if (absSpeed > 5 && Math.random() < dt * 2.5) sound.brake();
+  } else if (throttle === 0) {
+    data.speed *= Math.exp(-1.8 * dt);
   }
 
-  car.root.rotation.y = car.yaw;
-  car.root.userData.flame.visible = boosting;
-  car.root.userData.exhaust.intensity = boosting ? 2.2 : 0;
-
-  car.wheelSpin += speed * dt * 1.7;
-
-  return { speed, boosting };
-}
-
-function playerControls() {
-  return {
-    throttle:
-      (keys.KeyW || keys.ArrowUp ? 1 : 0) -
-      (keys.KeyS || keys.ArrowDown ? 1 : 0),
-
-    steer:
-      (keys.KeyA || keys.ArrowLeft ? 1 : 0) -
-      (keys.KeyD || keys.ArrowRight ? 1 : 0),
-
-    boost: !!(keys.ShiftLeft || keys.ShiftRight),
-    jump: !!keys.Space,
-    handbrake: !!keys.KeyX
-  };
-}
-
-// AI OPPONENT
-function updateAI(dt) {
-  const target = new THREE.Vector3(
-    ball.position.x + 3.1,
-    0,
-    ball.position.z
-  );
-
-  const delta = target.clone().sub(rival.root.position);
-  const desired = Math.atan2(-delta.x, -delta.z);
-  const error = wrapAngle(desired - rival.yaw);
-
-  const steer = clamp(error * 2.4, -1, 1);
-  const distance = delta.length();
-
-  let throttle = distance > 3 ? 1 : 0.15;
-
-  if (Math.abs(error) > 1.8 && distance > 8) {
-    throttle = 0.25;
+  if (boosting && (isPlayer || data.boost > 0)) {
+    data.speed += 31 * dt;
+    data.boost = Math.max(0, data.boost - 34 * dt);
+  } else {
+    data.boost = Math.min(100, data.boost + 12 * dt);
   }
 
-  const jump =
-    ball.position.y > 2.8 &&
-    distance < 8 &&
-    rival.grounded;
+  const maxSpeed = boosting ? 35 : 24;
+  data.speed = THREE.MathUtils.clamp(data.speed, -11, maxSpeed);
 
-  return updateCar(
-    rival,
-    dt,
-    {
-      throttle,
-      steer,
-      boost:
-        distance > 12 &&
-        Math.abs(error) < 0.55 &&
-        rival.boost > 8,
-      jump,
-      handbrake: false
-    },
-    true
-  );
-}
+  // Reduce sideways drift. Space makes the car grip and stop quickly.
+  let velocity = facing.clone().multiplyScalar(data.speed);
+  const lateral = data.velocity.dot(side);
+  const grip = braking ? 0.08 : 0.035;
+  velocity.addScaledVector(side, lateral * grip);
 
-// BALL COLLISIONS
-function collideCarBall(car, isPlayer) {
-  const carCenter = car.root.position.clone().add(
-    new THREE.Vector3(0, 0.8, 0)
-  );
-
-  const ballCenter = ball.position.clone();
-  const diff = ballCenter.sub(carCenter);
-  diff.y *= 0.65;
-
-  const minDist = 2.15;
-
-  if (diff.lengthSq() > minDist * minDist) return;
-
-  if (diff.lengthSq() < 0.0001) {
-    diff.set(isPlayer ? 1 : -1, 0.1, 0);
+  if (boosting) {
+    data.flame.visible = true;
+    data.flame.scale.setScalar(0.85 + Math.random() * 0.5);
+    data.flame.material.color.setHex(0x48cfff);
+  } else {
+    data.flame.visible = false;
   }
 
-  diff.normalize();
+  data.velocity.lerp(velocity, 1 - Math.exp(-10 * dt));
+  car.position.addScaledVector(data.velocity, dt);
 
-  const speed = car.velocity.length();
-  const impulse = 7 + speed * 0.72;
+  // Airborne movement
+  data.verticalSpeed -= 22 * dt;
+  car.position.y += data.verticalSpeed * dt;
 
-  ballVel.addScaledVector(diff, impulse);
-  ballVel.y = Math.max(ballVel.y, 2.1 + speed * 0.12);
+  if (car.position.y <= 0) {
+    car.position.y = 0;
+    data.verticalSpeed = 0;
+    data.grounded = true;
+  }
 
-  car.velocity.addScaledVector(diff, -1.1);
+  // Keep cars inside the arena.
+  car.position.x = THREE.MathUtils.clamp(car.position.x, -29, 29);
+  car.position.z = THREE.MathUtils.clamp(car.position.z, -17.5, 17.5);
 
-  impactSound(speed * 0.35);
+  // Wheel rotation
+  for (const wheel of data.wheels) {
+    wheel.rotation.x += data.speed * dt * 0.7;
+  }
+
+  if (isPlayer) {
+    ui.boostFill.style.width = `${data.boost}%`;
+    ui.boostValue.textContent = Math.round(data.boost);
+  }
 }
 
 function updateBall(dt) {
-  ballVel.y -= 18 * dt;
-  ball.position.addScaledVector(ballVel, dt);
+  ballVelocity.y -= 13 * dt;
+  ballGroup.position.addScaledVector(ballVelocity, dt);
 
-  ballVel.multiplyScalar(Math.exp(-0.38 * dt));
-
-  if (ball.position.y < BALL_R) {
-    ball.position.y = BALL_R;
-
-    if (ballVel.y < 0) {
-      ballVel.y *= -0.58;
+  // Ground bounce
+  if (ballGroup.position.y < 1.15) {
+    ballGroup.position.y = 1.15;
+    if (Math.abs(ballVelocity.y) > 1.2) {
+      ballVelocity.y *= -0.65;
+      if (Math.abs(ballVelocity.y) > 3) sound.hit();
+    } else {
+      ballVelocity.y = 0;
     }
-
-    ballVel.x *= 0.985;
-    ballVel.z *= 0.985;
+    ballVelocity.x *= 0.985;
+    ballVelocity.z *= 0.985;
   }
 
-  if (ball.position.z > FIELD_Z - BALL_R) {
-    ball.position.z = FIELD_Z - BALL_R;
-    ballVel.z = -Math.abs(ballVel.z) * 0.72;
+  // Ball rotation
+  ballGroup.rotation.x += ballVelocity.z * dt * 0.35;
+  ballGroup.rotation.z -= ballVelocity.x * dt * 0.35;
+
+  // Side walls
+  if (ballGroup.position.z < -19 || ballGroup.position.z > 19) {
+    ballGroup.position.z = THREE.MathUtils.clamp(ballGroup.position.z, -19, 19);
+    ballVelocity.z *= -0.78;
+    sound.hit();
   }
 
-  if (ball.position.z < -FIELD_Z + BALL_R) {
-    ball.position.z = -FIELD_Z + BALL_R;
-    ballVel.z = Math.abs(ballVel.z) * 0.72;
+  // End walls and goal detection
+  if (ballGroup.position.x < -32.5) {
+    if (Math.abs(ballGroup.position.z) < 6.2 && ballGroup.position.y < 5.1) {
+      scoreGoal('orange');
+      return;
+    }
+    ballGroup.position.x = -32.5;
+    ballVelocity.x *= -0.75;
+    sound.hit();
   }
 
-  const inMouth =
-    Math.abs(ball.position.z) < 7 &&
-    ball.position.y < 7;
-
-  if (ball.position.x > FIELD_X - BALL_R && !inMouth) {
-    ball.position.x = FIELD_X - BALL_R;
-    ballVel.x = -Math.abs(ballVel.x) * 0.72;
+  if (ballGroup.position.x > 32.5) {
+    if (Math.abs(ballGroup.position.z) < 6.2 && ballGroup.position.y < 5.1) {
+      scoreGoal('blue');
+      return;
+    }
+    ballGroup.position.x = 32.5;
+    ballVelocity.x *= -0.75;
+    sound.hit();
   }
 
-  if (ball.position.x < -FIELD_X + BALL_R && !inMouth) {
-    ball.position.x = -FIELD_X + BALL_R;
-    ballVel.x = Math.abs(ballVel.x) * 0.72;
+  // Car-to-ball collision
+  for (const car of [player, rival]) {
+    const difference = ballGroup.position.clone().sub(
+      new THREE.Vector3(car.position.x, car.position.y + 0.8, car.position.z)
+    );
+
+    const distance = difference.length();
+    if (distance < 2.75) {
+      difference.normalize();
+      const carSpeed = car.userData.velocity.length();
+      const impact = Math.max(5, carSpeed * 1.15 + 4);
+
+      ballGroup.position.addScaledVector(difference, 2.75 - distance + 0.03);
+      ballVelocity.addScaledVector(difference, impact);
+      ballVelocity.y += Math.max(0, car.userData.verticalSpeed) * 0.35;
+
+      if (car === player) {
+        ballVelocity.x += -Math.sin(car.userData.yaw) * 2.5;
+        ballVelocity.z += -Math.cos(car.userData.yaw) * 2.5;
+      }
+
+      if (distance > 2.55) sound.hit();
+    }
   }
 
-  ball.rotation.x += ballVel.z * dt * 0.55;
-  ball.rotation.z -= ballVel.x * dt * 0.55;
-
-  if (ball.position.x > 48 && inMouth) {
-    scoreGoal('BLUE');
-  }
-
-  if (ball.position.x < -48 && inMouth) {
-    scoreGoal('ORANGE');
-  }
+  // Ball drag and speed limit
+  ballVelocity.multiplyScalar(Math.exp(-0.45 * dt));
+  if (ballVelocity.length() > 36) ballVelocity.setLength(36);
 }
 
-// SCORING
-function scoreGoal(team) {
-  if (goalPause > 0) return;
-
-  if (team === 'BLUE') {
-    blueScore++;
-  } else {
-    orangeScore++;
-  }
-
-  ui.blueScore.textContent = blueScore;
-  ui.orangeScore.textContent = orangeScore;
-
-  ui.messageTitle.innerHTML =
-    team === 'BLUE'
-      ? 'BLUE<br><span>GOAL!</span>'
-      : 'ORANGE<br><span>GOAL!</span>';
-
-  ui.messageSub.textContent =
-    'What a shot! Get ready for kickoff.';
-
-  ui.playBtn.textContent = 'CONTINUE';
-  ui.message.classList.remove('hidden');
-
-  goalPause = 2.2;
-  running = false;
-
-  goalSound();
-}
-
-// CAMERA
 function updateCamera(dt) {
-  const target = new THREE.Vector3();
-  const desired = new THREE.Vector3();
+  const target = new THREE.Vector3(
+    player.position.x,
+    player.position.y + 0.8,
+    player.position.z
+  );
+
+  let desiredPosition;
 
   if (cameraMode === 0) {
-    const back = forwardOf(player.yaw).multiplyScalar(-1);
-
-    desired
-      .copy(player.root.position)
-      .add(new THREE.Vector3(0, 6.4, 0))
-      .addScaledVector(back, 11.5);
-
-    target
-      .copy(player.root.position)
-      .add(new THREE.Vector3(0, 1.1, 0))
-      .addScaledVector(forwardOf(player.yaw), 5);
-
-  } else if (cameraMode === 1) {
-    desired.set(0, 56, 0.1);
-    target.set(0, 0, 0);
-
+    const facing = getForward(player.userData.yaw);
+    desiredPosition = target.clone()
+      .addScaledVector(facing, -11)
+      .add(new THREE.Vector3(0, 6.2, 0));
   } else {
-    desired.set(-65, 40, 65);
-    target.set(0, 0, 0);
+    desiredPosition = new THREE.Vector3(0, 36, 0.1);
   }
 
-  camera.position.lerp(
-    desired,
-    1 - Math.exp(-4.5 * dt)
-  );
-
-  camera.lookAt(target);
+  camera.position.lerp(desiredPosition, 1 - Math.exp(3.5 * dt));
+  camera.lookAt(target.x, target.y + 0.8, target.z);
 }
 
-// HUD
-function updateHUD() {
-  ui.boostFill.style.width = `${player.boost}%`;
-  ui.boostValue.textContent = Math.round(player.boost);
-
-  ui.timer.textContent =
-    `${Math.floor(timeLeft / 60)}:${String(
-      Math.ceil(timeLeft % 60)
-    ).padStart(2, '0')}`;
+// Menu panels
+function closePanels() {
+  document.querySelectorAll('.popup-panel').forEach((panel) => {
+    panel.classList.add('hidden');
+  });
 }
 
-function showMenu(title, sub, button = 'PLAY') {
-  ui.messageTitle.innerHTML = title;
-  ui.messageSub.textContent = sub;
-  ui.playBtn.textContent = button;
-  ui.message.classList.remove('hidden');
-}
+$('playBtn').addEventListener('click', startMatch);
+$('resumeBtn').addEventListener('click', resumeGame);
+$('quitBtn').addEventListener('click', returnToMenu);
+$('againBtn').addEventListener('click', startMatch);
+$('endHomeBtn').addEventListener('click', returnToMenu);
 
-// MATCH CONTROL
-function startMatch() {
-  initAudio();
-
-  if (audio?.state === 'suspended') {
-    audio.resume();
-  }
-
-  if (finished) {
-    blueScore = 0;
-    orangeScore = 0;
-    timeLeft = MATCH_SECONDS;
-
-    ui.blueScore.textContent = '0';
-    ui.orangeScore.textContent = '0';
-
-    finished = false;
-    resetPositions();
-  }
-
-  running = true;
-  paused = false;
-  ui.message.classList.add('hidden');
-}
-
-function endMatch() {
-  running = false;
-  finished = true;
-
-  const winner =
-    blueScore === orangeScore
-      ? 'DRAW'
-      : blueScore > orangeScore
-        ? 'BLUE WINS'
-        : 'ORANGE WINS';
-
-  showMenu(
-    winner,
-    `Final score: ${blueScore} - ${orangeScore}`,
-    'PLAY AGAIN'
-  );
-
-  tone(520, 0.25, 'sine', 0.14, 160);
-}
-
-function resetGame() {
-  resetPositions();
-
-  if (!finished) {
-    running = true;
-    paused = false;
-    ui.message.classList.add('hidden');
-  }
-}
-
-// BUTTONS
-ui.playBtn.addEventListener('click', () => {
-  if (goalPause > 0) {
-    goalPause = 0;
-    resetPositions();
-    startMatch();
-  } else {
-    startMatch();
-  }
+$('garageBtn').addEventListener('click', () => {
+  startAudio();
+  closePanels();
+  $('garagePanel').classList.remove('hidden');
+  sound.click();
 });
 
-ui.soundBtn.addEventListener('click', () => {
-  soundEnabled = !soundEnabled;
-
-  ui.soundBtn.textContent =
-    soundEnabled ? '♫ SOUND ON' : '♫ SOUND OFF';
-
-  ui.soundBtn.setAttribute(
-    'aria-pressed',
-    String(soundEnabled)
-  );
-
-  if (soundEnabled) {
-    initAudio();
-    tone(600, 0.08, 'sine', 0.08);
-  } else if (audio) {
-    engineGain.gain.setTargetAtTime(
-      0,
-      audio.currentTime,
-      0.03
-    );
-
-    boostGain.gain.setTargetAtTime(
-      0,
-      audio.currentTime,
-      0.03
-    );
-  }
+$('settingsBtn').addEventListener('click', () => {
+  startAudio();
+  closePanels();
+  $('settingsPanel').classList.remove('hidden');
+  sound.click();
 });
 
-// KEYBOARD
-window.addEventListener('keydown', (e) => {
-  if (
-    ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space']
-      .includes(e.code)
-  ) {
-    e.preventDefault();
-  }
-
-  keys[e.code] = true;
-
-  if (e.repeat) return;
-
-  if (e.code === 'KeyC') {
-    cameraMode = (cameraMode + 1) % 3;
-  }
-
-  if (e.code === 'KeyR') {
-    resetGame();
-  }
-
-  if (e.code === 'Escape' && running) {
-    paused = true;
-    running = false;
-
-    showMenu(
-      'GAME<br><span>PAUSED</span>',
-      'Take a breather. Your match is waiting.',
-      'RESUME'
-    );
-
-  } else if (e.code === 'Escape' && paused) {
-    startMatch();
-  }
+$('howBtn').addEventListener('click', () => {
+  startAudio();
+  closePanels();
+  $('howPanel').classList.remove('hidden');
+  sound.click();
 });
 
-window.addEventListener('keyup', (e) => {
-  keys[e.code] = false;
+document.querySelectorAll('[data-close]').forEach((button) => {
+  button.addEventListener('click', () => {
+    closePanels();
+    sound.click();
+  });
 });
 
-window.addEventListener('blur', () => {
-  for (const key of Object.keys(keys)) {
-    keys[key] = false;
-  }
+document.querySelectorAll('.color-choice').forEach((button) => {
+  button.addEventListener('click', () => {
+    document.querySelectorAll('.color-choice').forEach((item) => {
+      item.classList.remove('selected');
+    });
+    button.classList.add('selected');
+    selectedColor = button.dataset.color;
+    setPlayerColor(selectedColor);
+    sound.click();
+  });
 });
 
-// RESIZE
-window.addEventListener('resize', () => {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-
-  renderer.setSize(
-    window.innerWidth,
-    window.innerHeight
-  );
-
-  renderer.setPixelRatio(
-    Math.min(window.devicePixelRatio || 1, 1.6)
-  );
-});
-
-// GAME LOOP
-camera.position.set(-25, 25, 36);
-camera.lookAt(0, 0, 0);
-
+// Match timer and animation
 function animate() {
   requestAnimationFrame(animate);
 
-  const dt = Math.min(clock.getDelta(), 0.033);
+  const dt = Math.min(clock.getDelta(), 0.04);
+  const elapsed = clock.elapsedTime;
 
-  if (goalPause > 0) {
-    goalPause -= dt;
+  // Gentle menu camera movement
+  if (gameState === 'menu') {
+    const t = elapsed * 0.2;
+    camera.position.set(
+      Math.sin(t) * 24,
+      15 + Math.sin(t * 1.8) * 1.5,
+      28 + Math.cos(t) * 8
+    );
+    camera.lookAt(0, 1, 0);
 
-    if (goalPause <= 0) {
-      resetPositions();
-    }
+    player.position.set(-12, 0, Math.sin(elapsed * 0.7) * 3);
+    player.userData.yaw = -Math.PI / 2 + Math.sin(elapsed * 0.4) * 0.15;
+    player.rotation.y = player.userData.yaw;
+
+    rival.position.set(12, 0, Math.cos(elapsed * 0.7) * 3);
+    rival.userData.yaw = Math.PI / 2 + Math.sin(elapsed * 0.4) * 0.15;
+    rival.rotation.y = rival.userData.yaw;
+
+    ballGroup.position.set(Math.sin(elapsed * 0.5) * 2, 1.2, Math.cos(elapsed * 0.5) * 2);
+    ballGroup.rotation.y += dt * 0.5;
   }
 
-  if (running && !paused && !finished) {
-    if (kickoff > 0) {
-      kickoff -= dt;
-
+  if (gameState === 'playing') {
+    if (countdown > 0) {
+      countdown -= dt;
+      ui.matchStatus.textContent = countdown > 1 ? 'GET READY' : 'GO!';
+      if (countdown <= 0) {
+        ui.matchStatus.textContent = 'IN PLAY';
+        ui.gameMessage.textContent = '';
+        sound.kickoff();
+      }
     } else {
-      timeLeft = Math.max(0, timeLeft - dt);
-
+      timeLeft -= dt;
       if (timeLeft <= 0) {
-        endMatch();
+        timeLeft = 0;
+        finishMatch();
       }
 
-      const pc = updateCar(
-        player,
-        dt,
-        playerControls()
-      );
-
-      const ac = updateAI(dt);
-
-      collideCarBall(player, true);
-      collideCarBall(rival, false);
-
+      updateCar(player, true, dt);
+      updateCar(rival, false, dt);
       updateBall(dt);
-      updateAudio(pc.speed, pc.boosting);
     }
 
-  } else {
-    updateAudio(0, false);
+    const minutes = Math.floor(timeLeft / 60);
+    const seconds = Math.floor(timeLeft % 60);
+    ui.timer.textContent = `${minutes}:${String(seconds).padStart(2, '0')}`;
+
+    updateCamera(dt);
+    updateEngineSound();
   }
 
-  updateCamera(dt);
-  updateHUD();
+  if (gameState === 'paused' || gameState === 'ended' || gameState === 'goal') {
+    updateCamera(dt);
+  }
 
   renderer.render(scene, camera);
 }
 
-showMenu(
-  'ROCKET<br><span>SOCCER</span>',
-  'Drive fast. Hit hard. Score goals.',
-  'KICK OFF'
-);
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
 
+returnToMenu();
 animate();
