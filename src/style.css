@@ -1,15 +1,15 @@
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800;900&family=Orbitron:wght@600;700;800;900&display=swap');
 
-@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@500;600;700;800;900&family=Rajdhani:wght@500;600;700;800&display=swap');
+:root {
+  font-family: 'Barlow Condensed', Arial, sans-serif;
+  color: #f4f8ff;
+  background: #07111f;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
 
 * {
   box-sizing: border-box;
-}
-
-:root {
-  color-scheme: dark;
-  --blue: #24aaff;
-  --orange: #ff852b;
-  --panel: rgba(5, 15, 30, 0.86);
 }
 
 html,
@@ -18,9 +18,6 @@ body {
   height: 100%;
   margin: 0;
   overflow: hidden;
-  background: #071426;
-  color: white;
-  font-family: 'Rajdhani', Arial, sans-serif;
 }
 
 body {
@@ -32,168 +29,198 @@ body {
   width: 100vw;
   height: 100vh;
   overflow: hidden;
+  background: #07111f;
   isolation: isolate;
-  background: #071426;
 }
 
 #game canvas {
   position: absolute;
   inset: 0;
-  display: block;
   width: 100%;
   height: 100%;
+  display: block;
   outline: none;
 }
 
-/* SCOREBOARD */
-
 #hud {
   position: absolute;
+  z-index: 4;
   top: 22px;
   left: 50%;
-  z-index: 5;
+  transform: translateX(-50%);
   display: flex;
   align-items: center;
-  gap: 12px;
-  transform: translateX(-50%);
+  gap: 10px;
   pointer-events: none;
 }
 
 .team {
+  min-width: 145px;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 15px;
-  min-width: 150px;
-  padding: 10px 22px;
-  border-radius: 9px;
-  background: var(--panel);
-  backdrop-filter: blur(12px);
-  box-shadow: 0 8px 30px #0008;
-  font-family: 'Orbitron', sans-serif;
-  font-size: 13px;
+  gap: 14px;
+  padding: 9px 18px;
+  background: linear-gradient(135deg, #09182cdd, #101e32dd);
+  border-radius: 8px;
+  font-family: Orbitron, Arial, sans-serif;
+  font-size: 12px;
   font-weight: 800;
   letter-spacing: 2px;
+  box-shadow: 0 7px 24px #0007;
 }
 
 .team strong {
-  font-size: 31px;
+  font-size: 30px;
   line-height: 1;
   color: white;
 }
 
-.blue {
-  border: 1px solid #269fff;
-  border-left: 4px solid #269fff;
-  box-shadow: 0 0 22px #008cff30;
+.team.blue {
+  border: 1px solid #3bb5ff;
+  border-left: 4px solid #39b9ff;
+  box-shadow: 0 0 22px #009dff26;
 }
 
-.orange {
-  border: 1px solid #ff852b;
-  border-right: 4px solid #ff852b;
-  box-shadow: 0 0 22px #ff852b30;
+.team.orange {
+  border: 1px solid #ff9b45;
+  border-right: 4px solid #ff963c;
+  box-shadow: 0 0 22px #ff751d26;
 }
 
 #timer {
-  min-width: 100px;
-  padding: 13px 17px;
-  border: 1px solid #ffffff35;
-  border-radius: 9px;
-  background: rgba(4, 12, 24, 0.94);
-  font-family: 'Orbitron', sans-serif;
-  font-size: 25px;
-  font-weight: 900;
+  min-width: 94px;
+  padding: 12px 14px;
+  border: 1px solid #ffffff44;
+  border-radius: 8px;
+  background: #07111fee;
   text-align: center;
+  font: 800 23px Orbitron, Arial, sans-serif;
   letter-spacing: 1px;
-  box-shadow: 0 8px 30px #0008;
+  box-shadow: 0 7px 24px #0007;
 }
 
-/* BOOST METER */
+.sound-button {
+  position: absolute;
+  z-index: 5;
+  top: 22px;
+  right: 22px;
+  padding: 10px 14px;
+  border: 1px solid #ffffff45;
+  border-radius: 7px;
+  background: #08182bdd;
+  color: #f5fbff;
+  font: 700 11px Orbitron, Arial, sans-serif;
+  letter-spacing: 1px;
+  cursor: pointer;
+  backdrop-filter: blur(10px);
+}
+
+.sound-button:hover {
+  border-color: #5ed7ff;
+  background: #12304c;
+}
+
+.glass-panel {
+  background: linear-gradient(145deg, #08192ddd, #0a2238dd);
+  border: 1px solid #ffffff2b;
+  box-shadow: 0 10px 28px #0006;
+  backdrop-filter: blur(10px);
+}
 
 #boost {
   position: absolute;
-  bottom: 27px;
-  left: 28px;
-  z-index: 5;
-  width: 220px;
-  padding: 15px 17px;
-  border: 1px solid #ffffff24;
-  border-radius: 12px;
-  background: var(--panel);
-  backdrop-filter: blur(12px);
-  text-align: center;
-  font-family: 'Orbitron', sans-serif;
-  font-size: 12px;
+  z-index: 4;
+  left: 25px;
+  bottom: 24px;
+  width: 205px;
+  padding: 13px 15px;
+  border-radius: 9px;
+  font-family: Orbitron, Arial, sans-serif;
+}
+
+.boost-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
   font-weight: 800;
   letter-spacing: 2px;
-  box-shadow: 0 8px 30px #0008;
-}
-
-.boost-track {
-  height: 13px;
-  margin: 10px 0 7px;
-  overflow: hidden;
-  border: 1px solid #ffffff35;
-  border-radius: 20px;
-  background: #081321;
-}
-
-#boostFill {
-  width: 100%;
-  height: 100%;
-  border-radius: 20px;
-  background: linear-gradient(90deg, #00aaff, #39ffd0);
-  box-shadow: 0 0 15px #00c8ff;
-  transition: width 0.12s linear;
 }
 
 #boostValue {
-  color: #53dfff;
-  font-size: 21px;
+  font-size: 20px;
+  color: #53e7ff;
 }
 
-/* CONTROL GUIDE */
+.boost-track {
+  height: 12px;
+  margin: 9px 0 5px;
+  border: 1px solid #ffffff44;
+  border-radius: 20px;
+  background: #020b16;
+  overflow: hidden;
+}
+
+#boostFill {
+  height: 100%;
+  width: 100%;
+  border-radius: 20px;
+  background: linear-gradient(90deg, #087dff, #20e9df);
+  box-shadow: 0 0 14px #00bfff;
+  transition: width 0.08s linear;
+}
+
+#boost small {
+  font-size: 9px;
+  color: #a8c8df;
+  letter-spacing: 1.5px;
+}
 
 #controls {
   position: absolute;
+  z-index: 4;
   right: 22px;
-  bottom: 25px;
-  z-index: 5;
+  bottom: 24px;
+  max-width: 570px;
   display: flex;
-  flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 7px;
-  max-width: 500px;
+  flex-wrap: wrap;
+  gap: 6px;
   pointer-events: none;
 }
 
 #controls span {
-  padding: 8px 11px;
-  border: 1px solid #ffffff30;
-  border-radius: 7px;
-  background: rgba(5, 15, 30, 0.82);
-  color: #eaf5ff;
-  font-family: 'Orbitron', sans-serif;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.5px;
+  padding: 7px 9px;
+  border: 1px solid #ffffff2c;
+  border-radius: 5px;
+  background: #071626dc;
+  color: #d8e8f5;
+  font: 600 11px 'Barlow Condensed', Arial, sans-serif;
+  letter-spacing: 0.6px;
   backdrop-filter: blur(8px);
 }
 
-/* GAME MESSAGE AND MENU */
+#controls b {
+  color: #6edaff;
+  font-family: Orbitron, Arial, sans-serif;
+  font-size: 9px;
+  margin-right: 3px;
+}
 
 #message {
   position: absolute;
-  inset: 0;
   z-index: 10;
+  inset: 0;
   display: flex;
-  flex-direction: column;
-  justify-content: center;
   align-items: center;
-  padding: 25px;
-  background:
-    radial-gradient(ellipse at center, #102d4cbb 0%, #020711e8 75%);
-  text-align: center;
+  justify-content: center;
+  padding: 20px;
+  background: radial-gradient(
+    ellipse at 50% 44%,
+    #0b3156a8,
+    #020914ec 72%
+  );
   backdrop-filter: blur(5px);
 }
 
@@ -201,110 +228,120 @@ body {
   display: none;
 }
 
-#message h1 {
-  margin: 0 0 12px;
-  color: #55caff;
-  font-family: 'Orbitron', sans-serif;
-  font-size: clamp(35px, 7vw, 78px);
-  font-weight: 900;
+.menu-card {
+  width: min(520px, 94vw);
+  padding: 42px 38px 32px;
+  text-align: center;
+  border: 1px solid #7ddcff66;
+  border-radius: 16px;
+  background: linear-gradient(145deg, #0b2037f2, #071321f5);
+  box-shadow:
+    0 0 0 5px #0d6ba322,
+    0 25px 80px #000b,
+    0 0 55px #078bff26;
+}
+
+.eyebrow {
+  margin-bottom: 13px;
+  color: #6edbff;
+  font: 700 10px Orbitron, Arial, sans-serif;
   letter-spacing: 3px;
-  text-shadow:
-    0 0 12px #008cff,
-    0 0 35px #008cff88;
-  animation: titleGlow 2s ease-in-out infinite alternate;
+}
+
+#message h1 {
+  margin: 0;
+  color: #f7fbff;
+  font: 900 clamp(43px, 8vw, 76px)/0.88 Orbitron, Arial, sans-serif;
+  letter-spacing: -2px;
+  text-shadow: 0 5px 0 #163b5d, 0 0 28px #008cff66;
+}
+
+#message h1 span {
+  color: #55cfff;
 }
 
 #message p {
-  margin: 0 0 28px;
-  color: #d4eaff;
-  font-size: clamp(16px, 2vw, 22px);
-  font-weight: 700;
-  letter-spacing: 1px;
+  margin: 20px 0 26px;
+  color: #c3d8e9;
+  font-size: 21px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
 }
 
 #playBtn {
   min-width: 210px;
-  padding: 16px 42px;
-  border: 2px solid #8de2ff;
-  border-radius: 9px;
-  background: linear-gradient(110deg, #087bff, #00c9ff);
+  padding: 15px 28px;
+  border: 1px solid #b7f0ff;
+  border-radius: 7px;
+  background: linear-gradient(100deg, #087bff, #00c8e9);
   color: white;
-  font-family: 'Orbitron', sans-serif;
-  font-size: 19px;
-  font-weight: 900;
+  font: 800 17px Orbitron, Arial, sans-serif;
   letter-spacing: 2px;
   cursor: pointer;
-  box-shadow:
-    0 0 15px #008cff99,
-    0 0 40px #008cff55;
-  transition:
-    transform 0.18s ease,
-    filter 0.18s ease,
-    box-shadow 0.18s ease;
+  box-shadow: 0 0 18px #008cff77;
+  transition: transform 0.15s, filter 0.15s;
 }
 
 #playBtn:hover {
-  transform: scale(1.06);
-  filter: brightness(1.2);
-  box-shadow:
-    0 0 22px #008cff,
-    0 0 55px #008cff88;
+  transform: translateY(-2px) scale(1.03);
+  filter: brightness(1.15);
 }
 
 #playBtn:active {
-  transform: scale(0.97);
+  transform: scale(0.98);
 }
 
-@keyframes titleGlow {
-  from {
-    text-shadow:
-      0 0 12px #008cff,
-      0 0 25px #008cff66;
-  }
-
-  to {
-    text-shadow:
-      0 0 20px #008cff,
-      0 0 48px #008cffbb;
-  }
+.menu-note {
+  margin-top: 20px;
+  color: #89a9c2;
+  font-size: 13px;
+  letter-spacing: 0.5px;
 }
-
-/* SMALL SCREENS */
 
 @media (max-width: 700px) {
   #hud {
-    top: 10px;
-    gap: 5px;
+    top: 9px;
+    gap: 4px;
   }
 
   .team {
-    min-width: 85px;
-    gap: 7px;
-    padding: 8px;
-    font-size: 10px;
+    min-width: 80px;
+    padding: 8px 7px;
+    gap: 6px;
+    font-size: 9px;
     letter-spacing: 1px;
   }
 
   .team strong {
-    font-size: 22px;
+    font-size: 21px;
   }
 
   #timer {
-    min-width: 72px;
-    padding: 9px 7px;
-    font-size: 18px;
+    min-width: 65px;
+    padding: 9px 6px;
+    font-size: 16px;
+  }
+
+  .sound-button {
+    top: 70px;
+    right: 9px;
+    padding: 8px;
+    font-size: 9px;
   }
 
   #boost {
-    bottom: 12px;
-    left: 10px;
-    width: 145px;
-    padding: 10px;
-    font-size: 10px;
+    left: 9px;
+    bottom: 9px;
+    width: 132px;
+    padding: 9px;
+  }
+
+  .boost-heading {
+    font-size: 9px;
   }
 
   #boostValue {
-    font-size: 17px;
+    font-size: 16px;
   }
 
   #controls {
@@ -315,31 +352,19 @@ body {
   }
 
   #controls span {
-    padding: 5px 7px;
+    padding: 5px 6px;
+    font-size: 9px;
+  }
+
+  #controls b {
     font-size: 8px;
   }
 
-  #message h1 {
-    letter-spacing: 1px;
+  .menu-card {
+    padding: 34px 20px 25px;
   }
 
-  #playBtn {
-    min-width: 170px;
-    padding: 14px 28px;
-    font-size: 16px;
-  }
-}
-
-@media (max-width: 400px) {
-  #controls {
-    max-width: 190px;
-  }
-
-  #controls span {
-    font-size: 7px;
-  }
-
-  #boost {
-    width: 120px;
+  #message p {
+    font-size: 18px;
   }
 }
