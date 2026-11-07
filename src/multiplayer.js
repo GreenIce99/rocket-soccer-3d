@@ -540,11 +540,14 @@ function watchRoom() {
       isHost ? "START MATCH" : "WAITING FOR HOST";
 
     if (room.status === "playing") {
-      status("MATCH FOUND! Starting the game...");
+      status("MATCH FOUND! Starting the online game...");
 
       if (autoStartedRoomId !== currentRoomId) {
         autoStartedRoomId = currentRoomId;
 
+        // IMPORTANT:
+        // Dispatch the event handled by src/main.js.
+        // Do NOT click the normal offline Play button here.
         window.dispatchEvent(
           new CustomEvent("rocket-online-start", {
             detail: {
@@ -801,7 +804,11 @@ async function connectToPair(entry) {
     const startResult = await runTransaction(roomRef, latestRoom => {
       if (!latestRoom) return;
 
-      if (latestRoom.status === "waiting" && latestRoom.quickMatch) {
+      if (
+        latestRoom.status === "waiting" &&
+        latestRoom.quickMatch &&
+        Object.keys(latestRoom.players || {}).length === 2
+      ) {
         latestRoom.status = "playing";
         latestRoom.startedAt = Date.now();
       }
@@ -1074,6 +1081,7 @@ async function leaveRoom() {
   currentTicketId = null;
   isHost = false;
   enteringRoom = false;
+  autoStartedRoomId = null;
 
   if (oldRoomId) {
     try {
@@ -1103,24 +1111,21 @@ async function leaveRoom() {
   showHome();
   setBusy(false);
   status("You left the room.");
+
+  // Tell the game to end its local online session.
+  window.dispatchEvent(
+    new CustomEvent("rocket-online-leave")
+  );
 }
 
 /* =========================================
    INITIALIZE
    ========================================= */
 
-window.addEventListener("rocket-online-start", () => {
-  const onlinePanel = $("rocketOnlinePanel");
-  if (onlinePanel) onlinePanel.style.display = "none";
-
-  const playButton = $("playBtn");
-
-  if (playButton) {
-    playButton.click();
-  } else {
-    status("Match found, but the game start button was not found.");
-  }
-});
+// IMPORTANT:
+// There is intentionally NO listener here that clicks playBtn.
+// src/main.js listens for rocket-online-start and starts the
+// authoritative online game itself.
 
 async function initialize() {
   try {
