@@ -17,11 +17,8 @@ import {
 
 /* =========================================
    ROCKET SOCCER MULTIPLAYER
-   Automatic matchmaking with unique tab IDs
    ========================================= */
 
-// Every tab gets its own player ID.
-// Firebase anonymous login IDs can be shared across tabs.
 const clientId = crypto.randomUUID
   ? crypto.randomUUID()
   : "tab_" + Date.now() + "_" + Math.random().toString(36).slice(2);
@@ -34,15 +31,12 @@ let currentTicketId = null;
 let searching = false;
 let enteringRoom = false;
 let busy = false;
+let autoStartedRoomId = null;
 
 let roomListener = null;
 let chatListener = null;
 let ticketListener = null;
 let heartbeat = null;
-
-/* =========================================
-   HELPERS
-   ========================================= */
 
 const $ = id => document.getElementById(id);
 
@@ -124,6 +118,61 @@ function addStyles() {
       color:white;
       font-family:Arial,sans-serif;
       box-shadow:0 12px 35px rgba(0,0,0,.35);
+    }
+
+    #rocketOnlinePanel {
+      position:fixed !important;
+      z-index:10000 !important;
+      top:50% !important;
+      left:50% !important;
+      transform:translate(-50%,-50%) !important;
+      width:min(92vw,650px) !important;
+      max-height:88vh;
+      overflow-y:auto;
+      margin:0 !important;
+      display:none;
+      border:1px solid rgba(91,190,255,.45);
+      background:linear-gradient(145deg,rgba(7,18,36,.98),rgba(13,37,65,.98));
+      box-shadow:0 0 0 100vmax rgba(1,6,15,.78),0 25px 90px rgba(0,0,0,.65);
+      backdrop-filter:blur(18px);
+    }
+
+    #onlineMenuButton {
+      min-width:115px;
+      padding:12px 17px;
+      margin:15px 0 0 10px;
+      border:1px solid rgba(75,190,255,.65);
+      border-radius:7px;
+      color:#eaf7ff;
+      background:linear-gradient(135deg,rgba(13,88,150,.9),rgba(8,43,83,.95));
+      box-shadow:0 5px 22px rgba(0,130,255,.18);
+      font-family:'Orbitron',sans-serif;
+      font-size:10px;
+      font-weight:800;
+      letter-spacing:1px;
+      cursor:pointer;
+      transition:transform .2s ease,filter .2s ease,box-shadow .2s ease;
+    }
+
+    #onlineMenuButton:hover {
+      transform:translateY(-2px);
+      filter:brightness(1.2);
+      box-shadow:0 8px 28px rgba(0,150,255,.35);
+    }
+
+    #onlineClose {
+      position:absolute;
+      top:13px;
+      right:13px;
+      width:34px;
+      height:34px;
+      padding:0;
+      border:1px solid rgba(255,255,255,.2);
+      border-radius:8px;
+      color:white;
+      background:rgba(255,255,255,.08);
+      font-size:20px;
+      cursor:pointer;
     }
 
     #rocketOnlinePanel * {
@@ -268,7 +317,8 @@ function createPanel() {
   panel.id = "rocketOnlinePanel";
 
   panel.innerHTML = `
-    <h2>🌐 ONLINE MULTIPLAYER</h2>
+    <button id="onlineClose" aria-label="Close online menu">×</button>
+    <h2>🌐 ONLINE PLAY</h2>
 
     <div class="onlineSubtitle">
       Play Rocket Soccer with a friend.
@@ -362,13 +412,37 @@ function createPanel() {
     </div>
   `;
 
+  document.body.appendChild(panel);
+
+  const onlineMenuButton = document.createElement("button");
+  onlineMenuButton.id = "onlineMenuButton";
+  onlineMenuButton.type = "button";
+  onlineMenuButton.textContent = "ONLINE PLAY";
+
+  onlineMenuButton.addEventListener("click", () => {
+    panel.style.display = "block";
+    status("Connected to Firebase. Choose a game mode.");
+  });
+
+  const menuActions = document.querySelector(".menu-actions");
   const playButton = $("playBtn");
 
-  if (playButton?.parentElement) {
-    playButton.insertAdjacentElement("afterend", panel);
+  if (menuActions) {
+    menuActions.appendChild(onlineMenuButton);
+  } else if (playButton?.parentElement) {
+    playButton.insertAdjacentElement("afterend", onlineMenuButton);
   } else {
-    document.body.appendChild(panel);
+    document.body.appendChild(onlineMenuButton);
   }
+
+  $("onlineClose").onclick = () => {
+    if (searching) {
+      status("Cancel your search before closing the online menu.");
+      return;
+    }
+
+    panel.style.display = "none";
+  };
 
   $("onlineQuickMatch").onclick = quickMatch;
   $("onlineCancelSearch").onclick = cancelSearch;
@@ -402,6 +476,7 @@ async function openRoom(roomId, roomData) {
   currentRoomId = roomId;
   currentRoomCode = roomData.code;
   isHost = roomData.host === clientId;
+  autoStartedRoomId = null;
 
   const playerRef = ref(
     database,
@@ -440,11 +515,11 @@ function watchRoom() {
     const entries = Object.entries(players);
 
     $("onlineRoomCode").textContent = room.code;
-
     $("onlinePlayerList").innerHTML = "";
 
     entries.forEach(([id, player], index) => {
       const line = document.createElement("div");
+
       line.textContent =
         `🚗 ${player.name || `Player ${index + 1}`}` +
         (id === clientId ? " (YOU)" : "");
@@ -465,17 +540,22 @@ function watchRoom() {
       isHost ? "START MATCH" : "WAITING FOR HOST";
 
     if (room.status === "playing") {
-      status("MATCH STARTED!");
+      status("MATCH FOUND! Starting the game...");
 
-      window.dispatchEvent(
-        new CustomEvent("rocket-online-start", {
-          detail: {
-            roomId: currentRoomId,
-            roomCode: room.code,
-            players
-          }
-        })
-      );
+      if (autoStartedRoomId !== currentRoomId) {
+        autoStartedRoomId = currentRoomId;
+
+        window.dispatchEvent(
+          new CustomEvent("rocket-online-start", {
+            detail: {
+              roomId: currentRoomId,
+              roomCode: room.code,
+              players,
+              startedAt: room.startedAt || Date.now()
+            }
+          })
+        );
+      }
     } else if (entries.length === 2) {
       status("Opponent connected! Ready to play.");
     } else {
@@ -547,13 +627,9 @@ async function quickMatch() {
       lastSeen: Date.now()
     };
 
-    // Save our own ticket first.
     await set(ticketRef, ticket);
-
-    // Remove our ticket if this tab disconnects.
     await onDisconnect(ticketRef).remove();
 
-    // Listen for another player pairing with us.
     ticketListener = onValue(ticketRef, async snapshot => {
       const entry = snapshot.val();
 
@@ -575,10 +651,8 @@ async function quickMatch() {
     });
 
     status("Searching for an opponent...");
-
     $("onlineCancelSearch").style.display = "block";
 
-    // Keep our ticket fresh while waiting.
     heartbeat = setInterval(() => {
       if (!searching || !currentTicketId) return;
 
@@ -588,24 +662,18 @@ async function quickMatch() {
       ).catch(error => console.warn("Queue heartbeat:", error));
     }, 10000);
 
-    // Generate the room information before the transaction.
-    // This keeps the same room ID if Firebase retries the transaction.
     const roomId = push(ref(database, "rooms")).key;
     const roomCode = makeCode();
-
     const now = Date.now();
 
     const result = await runTransaction(queueRef, queue => {
       queue = queue || {};
 
-      // Ensure our own ticket is included.
       const mine = queue[currentTicketId] || ticket;
       queue[currentTicketId] = mine;
 
-      // If this ticket has already been paired, don't pair it again.
       if (mine.status === "paired") return queue;
 
-      // Remove stale waiting entries.
       for (const [id, item] of Object.entries(queue)) {
         if (
           item &&
@@ -616,7 +684,6 @@ async function quickMatch() {
         }
       }
 
-      // Find another waiting tab.
       const candidate = Object.entries(queue).find(([id, item]) =>
         id !== currentTicketId &&
         item &&
@@ -625,7 +692,6 @@ async function quickMatch() {
         now - (item.lastSeen || item.createdAt || 0) <= 45000
       );
 
-      // No opponent yet: stay in the queue.
       if (!candidate) {
         queue[currentTicketId] = {
           ...mine,
@@ -637,8 +703,6 @@ async function quickMatch() {
       }
 
       const [otherTicketId, other] = candidate;
-
-      // The first waiting player is the host.
       const hostId = other.clientId;
 
       const roomData = {
@@ -663,7 +727,6 @@ async function quickMatch() {
         }
       };
 
-      // Both tickets receive the same room assignment.
       const pairing = {
         status: "paired",
         roomId,
@@ -692,8 +755,6 @@ async function quickMatch() {
 
     const myEntry = result.snapshot.val()?.[currentTicketId];
 
-    // If we paired with someone during our transaction,
-    // connect immediately.
     if (myEntry?.status === "paired") {
       await connectToPair(myEntry);
     } else {
@@ -722,8 +783,6 @@ async function connectToPair(entry) {
 
   const roomRef = ref(database, `rooms/${entry.roomId}`);
 
-  // Either player can create the room.
-  // The second transaction preserves the first player's room.
   const result = await runTransaction(roomRef, existingRoom => {
     return existingRoom || entry.roomData;
   });
@@ -732,18 +791,33 @@ async function connectToPair(entry) {
     throw new Error("The matched room could not be created.");
   }
 
-  const room = result.snapshot.val();
+  let room = result.snapshot.val();
 
-  // Make sure both assigned players are in the room.
   if (!room.players?.[clientId]) {
     throw new Error("Your player is missing from the matched room.");
+  }
+
+  if (room.quickMatch && room.status === "waiting") {
+    const startResult = await runTransaction(roomRef, latestRoom => {
+      if (!latestRoom) return;
+
+      if (latestRoom.status === "waiting" && latestRoom.quickMatch) {
+        latestRoom.status = "playing";
+        latestRoom.startedAt = Date.now();
+      }
+
+      return latestRoom;
+    });
+
+    if (startResult.snapshot.exists()) {
+      room = startResult.snapshot.val();
+    }
   }
 
   stopQueue();
 
   await openRoom(entry.roomId, room);
 
-  // Remove this tab's queue ticket after connecting.
   if (currentTicketId) {
     await remove(
       ref(database, `matchmaking/queue/${currentTicketId}`)
@@ -779,9 +853,7 @@ async function cancelSearch() {
 
 function stopQueue() {
   searching = false;
-
   stopQueueListener();
-
   $("onlineCancelSearch").style.display = "none";
 }
 
@@ -821,7 +893,6 @@ async function createPrivateRoom() {
     };
 
     await set(roomRef, roomData);
-
     await openRoom(roomId, roomData);
 
     status("Private room created. Share your code!");
@@ -882,7 +953,6 @@ async function joinRoom(code) {
       room.players = room.players || {};
 
       if (room.players[clientId]) return room;
-
       if (Object.keys(room.players).length >= 2) return;
 
       room.players[clientId] = {
@@ -901,7 +971,6 @@ async function joinRoom(code) {
     const room = result.snapshot.val();
 
     await openRoom(roomId, room);
-
     status("Joined room successfully!");
 
   } catch (error) {
@@ -1039,6 +1108,19 @@ async function leaveRoom() {
 /* =========================================
    INITIALIZE
    ========================================= */
+
+window.addEventListener("rocket-online-start", () => {
+  const onlinePanel = $("rocketOnlinePanel");
+  if (onlinePanel) onlinePanel.style.display = "none";
+
+  const playButton = $("playBtn");
+
+  if (playButton) {
+    playButton.click();
+  } else {
+    status("Match found, but the game start button was not found.");
+  }
+});
 
 async function initialize() {
   try {
