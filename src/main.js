@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import './style.css';
+import { auth, database, playerReady } from './firebase.js';
+import { ref, get, set, onValue } from 'firebase/database';
 
 const $ = (id) => document.getElementById(id);
 
@@ -406,6 +408,240 @@ let countdown = 0;
 let cameraMode = 0;
 let selectedColor = '#168cff';
 
+// ONLINE MATCH STATE
+let onlineSession = null;
+let onlineStartPending = false;
+let remoteInput = {
+  throttle: 0,
+  steer: 0,
+  braking: false,
+  boosting: false,
+  jump: false,
+  sentAt: 0
+};
+let onlineInputUnsubscribe = null;
+let onlineStateUnsubscribe = null;
+let onlineSyncTimer = 0;
+let onlineLastSend = 0;
+let onlineLastJump = false;
+let onlineLastSnapshot = 0;
+let controlledCar = player;
+
+function getLocalInput() {
+  return {
+    throttle: (keys.w || keys.arrowup ? 1 : 0) + (keys.s ? -1 : 0),
+    steer: (keys.a || keys.arrowleft ? 1 : 0) + (keys.d || keys.arrowright ? -1 : 0),
+    braking: !!keys.arrowdown,
+    boosting: !!keys.shift,
+    jump: !!keys[' '],
+    sentAt: Date.now()
+  };
+}
+
+function setCarFromSnapshot(car, state) {
+  if (!state || !car) return;
+  car.position.set(state.x || 0, state.y || 0, state.z || 0);
+  car.rotation.y = state.yaw || 0;
+  car.userData.yaw = state.yaw || 0;
+  car.userData.speed = state.speed || 0;
+  car.userData.verticalSpeed = state.verticalSpeed || 0;
+  car.userData.grounded = !!state.grounded;
+  car.userData.boost = Number.isFinite(state.boost) ? state.boost : 100;
+  if (state.vx !== undefined) {
+    car.userData.velocity.set(state.vx || 0, state.vy || 0, state.vz || 0);
+  }
+  car.userData.flame.visible = !!state.boosting;
+}
+
+function carSnapshot(car, boosting = false) {
+  return {
+    x: car.position.x,
+    y: car.position.y,
+    z: car.position.z,
+    yaw: car.userData.yaw,
+    speed: car.userData.speed,
+    verticalSpeed: car.userData.verticalSpeed,
+    grounded: car.userData.grounded,
+    boost: car.userData.boost,
+    vx: car.userData.velocity.x,
+    vy: car.userData.velocity.y,
+    vz: car.userData.velocity.z,
+    boosting
+  };
+}
+
+function applyOnlineSnapshot(state) {
+  if (!state || !onlineSession || onlineSession.isHost) return;
+
+  setCarFromSnapshot(player, state.blue);
+  setCarFromSnapshot(rival, state.orange);
+
+  if (state.ball) {
+    ballGroup.position.set(state.ball.x, state.ball.y, state.ball.z);
+    ballVelocity.set(state.ball.vx || 0, state.ball.vy || 0, state.ball.vz || 0);
+  }
+
+  if (Number.isFinite(state.blueScore)) blueScore = state.blueScore;
+  if (Number.isFinite(state.orangeScore)) orangeScore = state.orangeScore;
+  if (Number.isFinite(state.timeLeft)) timeLeft = state.timeLeft;
+  if (Number.isFinite(state.countdown)) countdown = state.countdown;
+
+  if (state.gameState) {
+    gameState = state.gameState;
+
+    if (gameState === 'ended') {
+      ui.endMenu.classList.remove('hidden');
+      ui.endTitle.textContent = blueScore > orangeScore
+        ? 'BLUE WINS!'
+        : blueScore < orangeScore
+          ? 'ORANGE WINS!'
+          : 'IT’S A DRAW!';
+      ui.endScore.textContent = `${blueScore} - ${orangeScore}`;
+    } else {
+      ui.endMenu.classList.add('hidden');
+    }
+  }
+
+  updateScore();
+}
+
+async function publishOnlineSnapshot() {
+  if (!onlineSession?.isHost || !onlineSession.roomId) return;
+
+  const now = performance.now();
+  if (now - onlineLastSnapshot < 45) return;
+  onlineLastSnapshot = now;
+
+  const snapshot = {
+    blue: carSnapshot(player, !!keys.shift),
+    orange: carSnapshot(rival, !!remoteInput.boosting),
+    ball: {
+      x: ballGroup.position.x,
+      y: ballGroup.position.y,
+      z: ballGroup.position.z,
+      vx: ballVelocity.x,
+      vy: ballVelocity.y,
+      vz: ballVelocity.z
+    },
+    blueScore,
+    orangeScore,
+    timeLeft,
+    countdown,
+    gameState,
+    sentAt: Date.now()
+  };
+
+  try {
+    await set(ref(database, `rooms/${onlineSession.roomId}/gameState`), snapshot);
+  } catch (error) {
+    console.warn('Online state sync failed:', error);
+  }
+}
+
+async function sendOnlineInput() {
+  if (!onlineSession || onlineSession.isHost || !onlineSession.roomId) return;
+
+  const now = performance.now();
+  if (now - onlineLastSend < 45) return;
+  onlineLastSend = now;
+
+  const input = getLocalInput();
+  const risingJump = input.jump && !onlineLastJump;
+  onlineLastJump = input.jump;
+
+  try {
+    await set(
+      ref(database, `rooms/${onlineSession.roomId}/inputs/${onlineSession.playerId}`),
+      { ...input, jump: risingJump, sentAt: Date.now() }
+    );
+  } catch (error) {
+    console.warn('Online input sync failed:', error);
+  }
+}
+
+async function beginOnlineSession(detail) {
+  onlineStartPending = true;
+
+  try {
+    await playerReady;
+
+    const roomId = detail?.roomId;
+    if (!roomId) throw new Error('Online room ID is missing.');
+
+    const roomSnapshot = await get(ref(database, `rooms/${roomId}`));
+    if (!roomSnapshot.exists()) throw new Error('Online room no longer exists.');
+
+    const room = roomSnapshot.val();
+    const players = room.players || {};
+    const uid = auth.currentUser?.uid;
+
+    const playerEntry = Object.entries(players).find(([, data]) => data.uid === uid);
+    if (!playerEntry) throw new Error('Your player was not found in this room.');
+
+    const playerId = playerEntry[0];
+    const isHost = room.host === playerId;
+    const opponentEntry = Object.entries(players).find(([id]) => id !== playerId);
+
+    if (!opponentEntry) throw new Error('Waiting for the other player.');
+
+    onlineSession = {
+      roomId,
+      playerId,
+      opponentId: opponentEntry[0],
+      isHost,
+      roomCode: room.code
+    };
+
+    controlledCar = isHost ? player : rival;
+    onlineLastSnapshot = 0;
+
+    remoteInput = {
+      throttle: 0, steer: 0, braking: false,
+      boosting: false, jump: false, sentAt: 0
+    };
+
+    if (onlineInputUnsubscribe) onlineInputUnsubscribe();
+    if (onlineStateUnsubscribe) onlineStateUnsubscribe();
+
+    if (isHost) {
+      onlineInputUnsubscribe = onValue(
+        ref(database, `rooms/${roomId}/inputs/${onlineSession.opponentId}`),
+        snapshot => {
+          const value = snapshot.val();
+
+          if (!value || Date.now() - (value.sentAt || 0) > 1500) {
+            remoteInput = {
+              throttle: 0, steer: 0, braking: false,
+              boosting: false, jump: false, sentAt: 0
+            };
+            return;
+          }
+
+          remoteInput = value;
+          if (value.jump) jump(rival);
+        }
+      );
+    } else {
+      onlineStateUnsubscribe = onValue(
+        ref(database, `rooms/${roomId}/gameState`),
+        snapshot => applyOnlineSnapshot(snapshot.val())
+      );
+    }
+
+    onlineStartPending = false;
+    startMatch();
+  } catch (error) {
+    console.error('Could not initialize online match:', error);
+    onlineStartPending = false;
+    onlineSession = null;
+    alert(`Online match error: ${error.message}`);
+  }
+}
+
+window.addEventListener('rocket-online-start', event => {
+  beginOnlineSession(event.detail);
+});
+
 window.addEventListener('keydown', (event) => {
   const key = event.key.toLowerCase();
 
@@ -416,7 +652,7 @@ window.addEventListener('keydown', (event) => {
   }
 
   if (key === ' ' && !keys[' ']) {
-    if (gameState === 'playing') jump(player);
+    if (gameState === 'playing' && (!onlineSession || onlineSession.isHost)) jump(player);
   }
 
   keys[key] = true;
@@ -697,8 +933,8 @@ const sound = {
 function updateEngineSound() {
   if (!audioStarted || !engineOsc || !engineGain) return;
 
-  const speed = Math.abs(player.userData.speed);
-  const boostOn = keys.shift && player.userData.boost > 0 &&
+  const speed = Math.abs(controlledCar.userData.speed);
+  const boostOn = keys.shift && controlledCar.userData.boost > 0 &&
     gameState === 'playing';
 
   const frequency = 48 + speed * 5 + (boostOn ? 45 : 0);
@@ -774,6 +1010,8 @@ function resetPositions() {
 
 // START MATCH
 function startMatch() {
+  if (onlineStartPending) return;
+
   startAudio();
   sound.click();
 
@@ -783,6 +1021,12 @@ function startMatch() {
 
   updateScore();
   resetPositions();
+
+  if (onlineSession) {
+    controlledCar = onlineSession.isHost ? player : rival;
+  } else {
+    controlledCar = player;
+  }
 
   gameState = 'playing';
 
@@ -817,6 +1061,14 @@ function resumeGame() {
 
 function returnToMenu() {
   gameState = 'menu';
+
+  if (onlineInputUnsubscribe) onlineInputUnsubscribe();
+  if (onlineStateUnsubscribe) onlineStateUnsubscribe();
+
+  onlineInputUnsubscribe = null;
+  onlineStateUnsubscribe = null;
+  onlineSession = null;
+  controlledCar = player;
 
   ui.mainMenu.classList.remove('hidden');
   ui.pauseMenu.classList.add('hidden');
@@ -877,7 +1129,7 @@ function getForward(yaw) {
   return new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
 }
 
-function updateCar(car, isPlayer, dt) {
+function updateCar(car, isPlayer, dt, inputOverride = null) {
   const data = car.userData;
 
   let throttle = 0;
@@ -885,17 +1137,12 @@ function updateCar(car, isPlayer, dt) {
   let braking = false;
   let boosting = false;
 
-  if (isPlayer) {
-    if (keys.w || keys.arrowup) throttle = 1;
-    if (keys.s) throttle = -1;
-
-    if (keys.a || keys.arrowleft) steer = 1;
-    if (keys.d || keys.arrowright) steer = -1;
-
-    // DOWN ARROW IS THE BRAKE.
-    braking = !!keys.arrowdown;
-
-    boosting = !!keys.shift && data.boost > 0;
+  if (isPlayer || inputOverride) {
+    const input = inputOverride || getLocalInput();
+    throttle = THREE.MathUtils.clamp(Number(input.throttle) || 0, -1, 1);
+    steer = THREE.MathUtils.clamp(Number(input.steer) || 0, -1, 1);
+    braking = !!input.braking;
+    boosting = !!input.boosting && data.boost > 0;
   } else {
     const targetX = ballGroup.position.x + 3.5;
     const targetZ = ballGroup.position.z * 0.85;
@@ -935,7 +1182,6 @@ function updateCar(car, isPlayer, dt) {
     }
   }
 
-  // STRONG BRAKING WITH DOWN ARROW
   if (braking) {
     data.speed *= Math.exp(-9.5 * dt);
 
@@ -994,7 +1240,7 @@ function updateCar(car, isPlayer, dt) {
     wheel.rotation.x += data.speed * dt * 0.7;
   }
 
-  if (isPlayer) {
+  if (isPlayer || car === controlledCar) {
     ui.boostFill.style.width = `${data.boost}%`;
     ui.boostValue.textContent = Math.round(data.boost);
   }
@@ -1111,25 +1357,27 @@ function updateBall(dt) {
 
 // CAMERA
 function updateCamera(dt) {
+  const followCar = onlineSession && !onlineSession.isHost ? rival : player;
+
   const target = new THREE.Vector3(
-    player.position.x,
-    player.position.y + 0.8,
-    player.position.z
+    followCar.position.x,
+    followCar.position.y + 0.8,
+    followCar.position.z
   );
 
   let desiredPosition;
 
   if (cameraMode === 0) {
-    const facing = getForward(player.userData.yaw);
+    const facing = getForward(followCar.userData.yaw);
 
     desiredPosition = target.clone()
       .addScaledVector(facing, -8.5)
       .add(new THREE.Vector3(0, 4.5, 0));
   } else {
     desiredPosition = new THREE.Vector3(
-      player.position.x + 2,
+      followCar.position.x + 2,
       24,
-      player.position.z + 8
+      followCar.position.z + 8
     );
   }
 
@@ -1239,7 +1487,7 @@ function animate() {
 
   if (gameState === 'playing') {
     if (countdown > 0) {
-      countdown -= dt;
+      if (!onlineSession || onlineSession.isHost) countdown -= dt;
 
       ui.matchStatus.textContent = countdown > 1
         ? 'GET READY'
@@ -1251,16 +1499,27 @@ function animate() {
         sound.kickoff();
       }
     } else {
-      timeLeft -= dt;
+      if (!onlineSession || onlineSession.isHost) timeLeft -= dt;
 
-      if (timeLeft <= 0) {
+      if ((!onlineSession || onlineSession.isHost) && timeLeft <= 0) {
         timeLeft = 0;
         finishMatch();
       }
 
-      updateCar(player, true, dt);
-      updateCar(rival, false, dt);
-      updateBall(dt);
+      if (!onlineSession) {
+        // Offline mode: BLUE is the human and ORANGE is the AI.
+        updateCar(player, true, dt);
+        updateCar(rival, false, dt);
+        updateBall(dt);
+      } else if (onlineSession.isHost) {
+        // Host simulates the complete match using both players' inputs.
+        updateCar(player, true, dt);
+        updateCar(rival, false, dt, remoteInput);
+        updateBall(dt);
+      } else {
+        // Guest sends controls; host sends authoritative physics snapshots.
+        sendOnlineInput();
+      }
     }
 
     const minutes = Math.floor(timeLeft / 60);
@@ -1279,6 +1538,12 @@ function animate() {
     gameState === 'goal'
   ) {
     updateCamera(dt);
+  }
+
+  if (onlineSession?.isHost && (
+    gameState === 'playing' || gameState === 'goal' || gameState === 'ended'
+  )) {
+    publishOnlineSnapshot();
   }
 
   renderer.render(scene, camera);
