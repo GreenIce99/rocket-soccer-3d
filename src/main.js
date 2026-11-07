@@ -83,10 +83,12 @@ function box(parent, w, h, d, material, x, y, z) {
     new THREE.BoxGeometry(w, h, d),
     material
   );
+
   mesh.position.set(x, y, z);
   mesh.castShadow = true;
   mesh.receiveShadow = true;
   parent.add(mesh);
+
   return mesh;
 }
 
@@ -95,10 +97,12 @@ function cylinder(parent, radius, length, material, x, y, z, rotationZ = 0) {
     new THREE.CylinderGeometry(radius, radius, length, 24),
     material
   );
+
   mesh.position.set(x, y, z);
   mesh.rotation.z = rotationZ;
   mesh.castShadow = true;
   parent.add(mesh);
+
   return mesh;
 }
 
@@ -108,6 +112,7 @@ box(arena, 64, 0.35, 40, materials.field, 0, -0.05, 0);
 
 // FIELD MARKINGS
 const lineMaterial = new THREE.MeshBasicMaterial({ color: 0xc7f4dd });
+
 box(arena, 0.12, 0.025, 40, lineMaterial, 0, 0.14, 0);
 box(arena, 64, 0.025, 0.12, lineMaterial, 0, 0.14, -20);
 box(arena, 64, 0.025, 0.12, lineMaterial, 0, 0.14, 20);
@@ -116,6 +121,7 @@ const centerCircle = new THREE.Mesh(
   new THREE.TorusGeometry(5, 0.09, 8, 80),
   lineMaterial
 );
+
 centerCircle.rotation.x = Math.PI / 2;
 centerCircle.position.y = 0.16;
 arena.add(centerCircle);
@@ -383,8 +389,8 @@ rival.userData.yaw = Math.PI / 2;
 player.rotation.y = player.userData.yaw;
 rival.rotation.y = rival.userData.yaw;
 
-function setPlayerColor(color) {
-  player.traverse((obj) => {
+function setCarTeamColor(car, color) {
+  car.traverse((obj) => {
     if (obj.isMesh && obj.material && obj.material.color) {
       if (
         obj.material.metalness > 0.3 &&
@@ -395,11 +401,22 @@ function setPlayerColor(color) {
     }
   });
 
-  player.userData.underglow.color.set(color);
+  car.userData.underglow.color.set(color);
+}
+
+function setPlayerColor(color) {
+  if (onlineSession) return;
+  setCarTeamColor(player, color);
+}
+
+function enforceOnlineTeamColors() {
+  setCarTeamColor(player, 0x168cff);
+  setCarTeamColor(rival, 0xff792c);
 }
 
 // INPUT
 const keys = {};
+
 let gameState = 'menu';
 let timeLeft = 180;
 let blueScore = 0;
@@ -411,6 +428,7 @@ let selectedColor = '#168cff';
 // ONLINE MATCH STATE
 let onlineSession = null;
 let onlineStartPending = false;
+
 let remoteInput = {
   throttle: 0,
   steer: 0,
@@ -419,9 +437,9 @@ let remoteInput = {
   jump: false,
   sentAt: 0
 };
+
 let onlineInputUnsubscribe = null;
 let onlineStateUnsubscribe = null;
-let onlineSyncTimer = 0;
 let onlineLastSend = 0;
 let onlineLastJump = false;
 let onlineLastSnapshot = 0;
@@ -429,8 +447,14 @@ let controlledCar = player;
 
 function getLocalInput() {
   return {
-    throttle: (keys.w || keys.arrowup ? 1 : 0) + (keys.s ? -1 : 0),
-    steer: (keys.a || keys.arrowleft ? 1 : 0) + (keys.d || keys.arrowright ? -1 : 0),
+    throttle:
+      (keys.w || keys.arrowup ? 1 : 0) +
+      (keys.s ? -1 : 0),
+
+    steer:
+      (keys.a || keys.arrowleft ? 1 : 0) +
+      (keys.d || keys.arrowright ? -1 : 0),
+
     braking: !!keys.arrowdown,
     boosting: !!keys.shift,
     jump: !!keys[' '],
@@ -440,16 +464,26 @@ function getLocalInput() {
 
 function setCarFromSnapshot(car, state) {
   if (!state || !car) return;
+
   car.position.set(state.x || 0, state.y || 0, state.z || 0);
   car.rotation.y = state.yaw || 0;
   car.userData.yaw = state.yaw || 0;
   car.userData.speed = state.speed || 0;
   car.userData.verticalSpeed = state.verticalSpeed || 0;
   car.userData.grounded = !!state.grounded;
-  car.userData.boost = Number.isFinite(state.boost) ? state.boost : 100;
+
+  car.userData.boost = Number.isFinite(state.boost)
+    ? state.boost
+    : 100;
+
   if (state.vx !== undefined) {
-    car.userData.velocity.set(state.vx || 0, state.vy || 0, state.vz || 0);
+    car.userData.velocity.set(
+      state.vx || 0,
+      state.vy || 0,
+      state.vz || 0
+    );
   }
+
   car.userData.flame.visible = !!state.boosting;
 }
 
@@ -476,26 +510,51 @@ function applyOnlineSnapshot(state) {
   setCarFromSnapshot(player, state.blue);
   setCarFromSnapshot(rival, state.orange);
 
+  ui.boostFill.style.width = `${rival.userData.boost}%`;
+  ui.boostValue.textContent = Math.round(rival.userData.boost);
+
   if (state.ball) {
-    ballGroup.position.set(state.ball.x, state.ball.y, state.ball.z);
-    ballVelocity.set(state.ball.vx || 0, state.ball.vy || 0, state.ball.vz || 0);
+    ballGroup.position.set(
+      state.ball.x,
+      state.ball.y,
+      state.ball.z
+    );
+
+    ballVelocity.set(
+      state.ball.vx || 0,
+      state.ball.vy || 0,
+      state.ball.vz || 0
+    );
   }
 
-  if (Number.isFinite(state.blueScore)) blueScore = state.blueScore;
-  if (Number.isFinite(state.orangeScore)) orangeScore = state.orangeScore;
-  if (Number.isFinite(state.timeLeft)) timeLeft = state.timeLeft;
-  if (Number.isFinite(state.countdown)) countdown = state.countdown;
+  if (Number.isFinite(state.blueScore)) {
+    blueScore = state.blueScore;
+  }
+
+  if (Number.isFinite(state.orangeScore)) {
+    orangeScore = state.orangeScore;
+  }
+
+  if (Number.isFinite(state.timeLeft)) {
+    timeLeft = state.timeLeft;
+  }
+
+  if (Number.isFinite(state.countdown)) {
+    countdown = state.countdown;
+  }
 
   if (state.gameState) {
     gameState = state.gameState;
 
     if (gameState === 'ended') {
       ui.endMenu.classList.remove('hidden');
+
       ui.endTitle.textContent = blueScore > orangeScore
         ? 'BLUE WINS!'
         : blueScore < orangeScore
           ? 'ORANGE WINS!'
           : 'IT’S A DRAW!';
+
       ui.endScore.textContent = `${blueScore} - ${orangeScore}`;
     } else {
       ui.endMenu.classList.add('hidden');
@@ -509,12 +568,14 @@ async function publishOnlineSnapshot() {
   if (!onlineSession?.isHost || !onlineSession.roomId) return;
 
   const now = performance.now();
+
   if (now - onlineLastSnapshot < 45) return;
   onlineLastSnapshot = now;
 
   const snapshot = {
     blue: carSnapshot(player, !!keys.shift),
     orange: carSnapshot(rival, !!remoteInput.boosting),
+
     ball: {
       x: ballGroup.position.x,
       y: ballGroup.position.y,
@@ -523,6 +584,7 @@ async function publishOnlineSnapshot() {
       vy: ballVelocity.y,
       vz: ballVelocity.z
     },
+
     blueScore,
     orangeScore,
     timeLeft,
@@ -532,16 +594,22 @@ async function publishOnlineSnapshot() {
   };
 
   try {
-    await set(ref(database, `rooms/${onlineSession.roomId}/gameState`), snapshot);
+    await set(
+      ref(database, `rooms/${onlineSession.roomId}/gameState`),
+      snapshot
+    );
   } catch (error) {
     console.warn('Online state sync failed:', error);
   }
 }
 
 async function sendOnlineInput() {
-  if (!onlineSession || onlineSession.isHost || !onlineSession.roomId) return;
+  if (!onlineSession || onlineSession.isHost || !onlineSession.roomId) {
+    return;
+  }
 
   const now = performance.now();
+
   if (now - onlineLastSend < 45) return;
   onlineLastSend = now;
 
@@ -551,8 +619,15 @@ async function sendOnlineInput() {
 
   try {
     await set(
-      ref(database, `rooms/${onlineSession.roomId}/inputs/${onlineSession.playerId}`),
-      { ...input, jump: risingJump, sentAt: Date.now() }
+      ref(
+        database,
+        `rooms/${onlineSession.roomId}/inputs/${onlineSession.playerId}`
+      ),
+      {
+        ...input,
+        jump: risingJump,
+        sentAt: Date.now()
+      }
     );
   } catch (error) {
     console.warn('Online input sync failed:', error);
@@ -566,23 +641,41 @@ async function beginOnlineSession(detail) {
     await playerReady;
 
     const roomId = detail?.roomId;
-    if (!roomId) throw new Error('Online room ID is missing.');
 
-    const roomSnapshot = await get(ref(database, `rooms/${roomId}`));
-    if (!roomSnapshot.exists()) throw new Error('Online room no longer exists.');
+    if (!roomId) {
+      throw new Error('Online room ID is missing.');
+    }
+
+    const roomSnapshot = await get(
+      ref(database, `rooms/${roomId}`)
+    );
+
+    if (!roomSnapshot.exists()) {
+      throw new Error('Online room no longer exists.');
+    }
 
     const room = roomSnapshot.val();
     const players = room.players || {};
     const uid = auth.currentUser?.uid;
 
-    const playerEntry = Object.entries(players).find(([, data]) => data.uid === uid);
-    if (!playerEntry) throw new Error('Your player was not found in this room.');
+    const playerEntry = Object.entries(players).find(
+      ([, data]) => data.uid === uid
+    );
+
+    if (!playerEntry) {
+      throw new Error('Your player was not found in this room.');
+    }
 
     const playerId = playerEntry[0];
     const isHost = room.host === playerId;
-    const opponentEntry = Object.entries(players).find(([id]) => id !== playerId);
 
-    if (!opponentEntry) throw new Error('Waiting for the other player.');
+    const opponentEntry = Object.entries(players).find(
+      ([id]) => id !== playerId
+    );
+
+    if (!opponentEntry) {
+      throw new Error('Waiting for the other player.');
+    }
 
     onlineSession = {
       roomId,
@@ -593,47 +686,78 @@ async function beginOnlineSession(detail) {
     };
 
     controlledCar = isHost ? player : rival;
+
+    // Never let both online players use the same team color.
+    enforceOnlineTeamColors();
+
     onlineLastSnapshot = 0;
+    onlineLastSend = 0;
+    onlineLastJump = false;
 
     remoteInput = {
-      throttle: 0, steer: 0, braking: false,
-      boosting: false, jump: false, sentAt: 0
+      throttle: 0,
+      steer: 0,
+      braking: false,
+      boosting: false,
+      jump: false,
+      sentAt: 0
     };
 
-    if (onlineInputUnsubscribe) onlineInputUnsubscribe();
-    if (onlineStateUnsubscribe) onlineStateUnsubscribe();
+    if (onlineInputUnsubscribe) {
+      onlineInputUnsubscribe();
+    }
+
+    if (onlineStateUnsubscribe) {
+      onlineStateUnsubscribe();
+    }
 
     if (isHost) {
       onlineInputUnsubscribe = onValue(
-        ref(database, `rooms/${roomId}/inputs/${onlineSession.opponentId}`),
+        ref(
+          database,
+          `rooms/${roomId}/inputs/${onlineSession.opponentId}`
+        ),
         snapshot => {
           const value = snapshot.val();
 
           if (!value || Date.now() - (value.sentAt || 0) > 1500) {
             remoteInput = {
-              throttle: 0, steer: 0, braking: false,
-              boosting: false, jump: false, sentAt: 0
+              throttle: 0,
+              steer: 0,
+              braking: false,
+              boosting: false,
+              jump: false,
+              sentAt: 0
             };
+
             return;
           }
 
           remoteInput = value;
-          if (value.jump) jump(rival);
+
+          if (value.jump) {
+            jump(rival);
+          }
         }
       );
     } else {
       onlineStateUnsubscribe = onValue(
         ref(database, `rooms/${roomId}/gameState`),
-        snapshot => applyOnlineSnapshot(snapshot.val())
+        snapshot => {
+          applyOnlineSnapshot(snapshot.val());
+        }
       );
     }
 
     onlineStartPending = false;
     startMatch();
+
   } catch (error) {
     console.error('Could not initialize online match:', error);
+
     onlineStartPending = false;
     onlineSession = null;
+
     alert(`Online match error: ${error.message}`);
   }
 }
@@ -642,7 +766,7 @@ window.addEventListener('rocket-online-start', event => {
   beginOnlineSession(event.detail);
 });
 
-window.addEventListener('keydown', (event) => {
+window.addEventListener('keydown', event => {
   const key = event.key.toLowerCase();
 
   if (
@@ -652,7 +776,12 @@ window.addEventListener('keydown', (event) => {
   }
 
   if (key === ' ' && !keys[' ']) {
-    if (gameState === 'playing' && (!onlineSession || onlineSession.isHost)) jump(player);
+    if (
+      gameState === 'playing' &&
+      (!onlineSession || onlineSession.isHost)
+    ) {
+      jump(player);
+    }
   }
 
   keys[key] = true;
@@ -667,11 +796,13 @@ window.addEventListener('keydown', (event) => {
   }
 
   if (key === 'r' && gameState === 'playing') {
-    resetPositions();
+    if (!onlineSession || onlineSession.isHost) {
+      resetPositions();
+    }
   }
 });
 
-window.addEventListener('keyup', (event) => {
+window.addEventListener('keyup', event => {
   keys[event.key.toLowerCase()] = false;
 });
 
@@ -708,6 +839,7 @@ function startAudio() {
     if (audioContext && audioContext.state === 'suspended') {
       audioContext.resume();
     }
+
     return;
   }
 
@@ -795,6 +927,7 @@ function noiseBurst(duration, gain, frequency = 900) {
   if (!audioStarted || !soundEnabled) return;
 
   const length = Math.floor(audioContext.sampleRate * duration);
+
   const buffer = audioContext.createBuffer(
     1,
     length,
@@ -875,6 +1008,7 @@ function startMenuMusic() {
       const now = audioContext.currentTime;
 
       playMusicNote(notes[index % notes.length], now, 0.8, 0.025);
+
       playMusicNote(
         notes[(index + 2) % notes.length] * 2,
         now + 0.18,
@@ -934,7 +1068,10 @@ function updateEngineSound() {
   if (!audioStarted || !engineOsc || !engineGain) return;
 
   const speed = Math.abs(controlledCar.userData.speed);
-  const boostOn = keys.shift && controlledCar.userData.boost > 0 &&
+
+  const boostOn =
+    keys.shift &&
+    controlledCar.userData.boost > 0 &&
     gameState === 'playing';
 
   const frequency = 48 + speed * 5 + (boostOn ? 45 : 0);
@@ -963,21 +1100,21 @@ soundToggle.addEventListener('click', () => {
   if (soundEnabled) sound.click();
 });
 
-$('masterVolume').addEventListener('input', (e) => {
-  volume.master = Number(e.target.value) / 100;
-  $('masterLabel').textContent = e.target.value + '%';
+$('masterVolume').addEventListener('input', event => {
+  volume.master = Number(event.target.value) / 100;
+  $('masterLabel').textContent = event.target.value + '%';
   updateAudioVolumes();
 });
 
-$('musicVolume').addEventListener('input', (e) => {
-  volume.music = Number(e.target.value) / 100;
-  $('musicLabel').textContent = e.target.value + '%';
+$('musicVolume').addEventListener('input', event => {
+  volume.music = Number(event.target.value) / 100;
+  $('musicLabel').textContent = event.target.value + '%';
   updateAudioVolumes();
 });
 
-$('effectsVolume').addEventListener('input', (e) => {
-  volume.effects = Number(e.target.value) / 100;
-  $('effectsLabel').textContent = e.target.value + '%';
+$('effectsVolume').addEventListener('input', event => {
+  volume.effects = Number(event.target.value) / 100;
+  $('effectsLabel').textContent = event.target.value + '%';
   updateAudioVolumes();
 });
 
@@ -1023,6 +1160,8 @@ function startMatch() {
   resetPositions();
 
   if (onlineSession) {
+    // Host is always BLUE; joining player is always ORANGE.
+    enforceOnlineTeamColors();
     controlledCar = onlineSession.isHost ? player : rival;
   } else {
     controlledCar = player;
@@ -1046,6 +1185,11 @@ function startMatch() {
 }
 
 function pauseGame() {
+  if (onlineSession) {
+    ui.gameMessage.textContent = 'PAUSE IS DISABLED IN ONLINE MATCHES';
+    return;
+  }
+
   gameState = 'paused';
   ui.pauseMenu.classList.remove('hidden');
   ui.matchStatus.textContent = 'PAUSED';
@@ -1068,6 +1212,7 @@ function returnToMenu() {
   onlineInputUnsubscribe = null;
   onlineStateUnsubscribe = null;
   onlineSession = null;
+  onlineStartPending = false;
   controlledCar = player;
 
   ui.mainMenu.classList.remove('hidden');
@@ -1139,11 +1284,14 @@ function updateCar(car, isPlayer, dt, inputOverride = null) {
 
   if (isPlayer || inputOverride) {
     const input = inputOverride || getLocalInput();
+
     throttle = THREE.MathUtils.clamp(Number(input.throttle) || 0, -1, 1);
     steer = THREE.MathUtils.clamp(Number(input.steer) || 0, -1, 1);
     braking = !!input.braking;
     boosting = !!input.boosting && data.boost > 0;
+
   } else {
+    // This is ONLY used for offline AI matches.
     const targetX = ballGroup.position.x + 3.5;
     const targetZ = ballGroup.position.z * 0.85;
 
@@ -1192,11 +1340,12 @@ function updateCar(car, isPlayer, dt, inputOverride = null) {
     if (absSpeed > 5 && Math.random() < dt * 2.5) {
       sound.brake();
     }
+
   } else if (throttle === 0) {
     data.speed *= Math.exp(-1.8 * dt);
   }
 
-  if (boosting && (isPlayer || data.boost > 0)) {
+  if (boosting && data.boost > 0) {
     data.speed += 31 * dt;
     data.boost = Math.max(0, data.boost - 34 * dt);
   } else {
@@ -1240,7 +1389,7 @@ function updateCar(car, isPlayer, dt, inputOverride = null) {
     wheel.rotation.x += data.speed * dt * 0.7;
   }
 
-  if (isPlayer || car === controlledCar) {
+  if (car === controlledCar) {
     ui.boostFill.style.width = `${data.boost}%`;
     ui.boostValue.textContent = Math.round(data.boost);
   }
@@ -1259,6 +1408,7 @@ function updateBall(dt) {
       if (Math.abs(ballVelocity.y) > 3) {
         sound.hit();
       }
+
     } else {
       ballVelocity.y = 0;
     }
@@ -1332,6 +1482,7 @@ function updateBall(dt) {
       );
 
       ballVelocity.addScaledVector(difference, impact);
+
       ballVelocity.y += Math.max(
         0,
         car.userData.verticalSpeed
@@ -1357,7 +1508,9 @@ function updateBall(dt) {
 
 // CAMERA
 function updateCamera(dt) {
-  const followCar = onlineSession && !onlineSession.isHost ? rival : player;
+  const followCar = onlineSession && !onlineSession.isHost
+    ? rival
+    : player;
 
   const target = new THREE.Vector3(
     followCar.position.x,
@@ -1373,6 +1526,7 @@ function updateCamera(dt) {
     desiredPosition = target.clone()
       .addScaledVector(facing, -8.5)
       .add(new THREE.Vector3(0, 4.5, 0));
+
   } else {
     desiredPosition = new THREE.Vector3(
       followCar.position.x + 2,
@@ -1394,7 +1548,7 @@ function updateCamera(dt) {
 
 // MENU PANELS
 function closePanels() {
-  document.querySelectorAll('.popup-panel').forEach((panel) => {
+  document.querySelectorAll('.popup-panel').forEach(panel => {
     panel.classList.add('hidden');
   });
 }
@@ -1426,21 +1580,22 @@ $('howBtn').addEventListener('click', () => {
   sound.click();
 });
 
-document.querySelectorAll('[data-close]').forEach((button) => {
+document.querySelectorAll('[data-close]').forEach(button => {
   button.addEventListener('click', () => {
     closePanels();
     sound.click();
   });
 });
 
-document.querySelectorAll('.color-choice').forEach((button) => {
+document.querySelectorAll('.color-choice').forEach(button => {
   button.addEventListener('click', () => {
-    document.querySelectorAll('.color-choice').forEach((item) => {
+    document.querySelectorAll('.color-choice').forEach(item => {
       item.classList.remove('selected');
     });
 
     button.classList.add('selected');
     selectedColor = button.dataset.color;
+
     setPlayerColor(selectedColor);
     sound.click();
   });
@@ -1464,13 +1619,23 @@ function animate() {
 
     camera.lookAt(0, 1, 0);
 
-    player.position.set(-12, 0, Math.sin(elapsed * 0.7) * 3);
+    player.position.set(
+      -12,
+      0,
+      Math.sin(elapsed * 0.7) * 3
+    );
+
     player.userData.yaw = -Math.PI / 2 +
       Math.sin(elapsed * 0.4) * 0.15;
 
     player.rotation.y = player.userData.yaw;
 
-    rival.position.set(12, 0, Math.cos(elapsed * 0.7) * 3);
+    rival.position.set(
+      12,
+      0,
+      Math.cos(elapsed * 0.7) * 3
+    );
+
     rival.userData.yaw = Math.PI / 2 +
       Math.sin(elapsed * 0.4) * 0.15;
 
@@ -1487,7 +1652,10 @@ function animate() {
 
   if (gameState === 'playing') {
     if (countdown > 0) {
-      if (!onlineSession || onlineSession.isHost) countdown -= dt;
+      // The host owns the countdown in online matches.
+      if (!onlineSession || onlineSession.isHost) {
+        countdown -= dt;
+      }
 
       ui.matchStatus.textContent = countdown > 1
         ? 'GET READY'
@@ -1498,26 +1666,35 @@ function animate() {
         ui.gameMessage.textContent = '';
         sound.kickoff();
       }
-    } else {
-      if (!onlineSession || onlineSession.isHost) timeLeft -= dt;
 
-      if ((!onlineSession || onlineSession.isHost) && timeLeft <= 0) {
+    } else {
+      // The host owns the clock in online matches.
+      if (!onlineSession || onlineSession.isHost) {
+        timeLeft -= dt;
+      }
+
+      if (
+        (!onlineSession || onlineSession.isHost) &&
+        timeLeft <= 0
+      ) {
         timeLeft = 0;
         finishMatch();
       }
 
       if (!onlineSession) {
-        // Offline mode: BLUE is the human and ORANGE is the AI.
+        // OFFLINE: BLUE HUMAN VS ORANGE AI.
         updateCar(player, true, dt);
         updateCar(rival, false, dt);
         updateBall(dt);
+
       } else if (onlineSession.isHost) {
-        // Host simulates the complete match using both players' inputs.
+        // ONLINE HOST: SIMULATES BOTH REAL PLAYERS.
         updateCar(player, true, dt);
         updateCar(rival, false, dt, remoteInput);
         updateBall(dt);
+
       } else {
-        // Guest sends controls; host sends authoritative physics snapshots.
+        // ONLINE GUEST: SENDS INPUT; HOST SENDS THE GAME STATE.
         sendOnlineInput();
       }
     }
@@ -1540,9 +1717,15 @@ function animate() {
     updateCamera(dt);
   }
 
-  if (onlineSession?.isHost && (
-    gameState === 'playing' || gameState === 'goal' || gameState === 'ended'
-  )) {
+  // Only the host publishes the authoritative match state.
+  if (
+    onlineSession?.isHost &&
+    (
+      gameState === 'playing' ||
+      gameState === 'goal' ||
+      gameState === 'ended'
+    )
+  ) {
     publishOnlineSnapshot();
   }
 
@@ -1553,7 +1736,6 @@ function animate() {
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
-
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
