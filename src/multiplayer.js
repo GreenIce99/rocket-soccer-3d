@@ -1,3 +1,4 @@
+
 import { auth, database, playerReady } from "./firebase.js";
 
 import {
@@ -15,10 +16,6 @@ import {
   onDisconnect
 } from "firebase/database";
 
-/* =========================================
-   ROCKET SOCCER MULTIPLAYER
-   ========================================= */
-
 const clientId = crypto.randomUUID
   ? crypto.randomUUID()
   : "tab_" + Date.now() + "_" + Math.random().toString(36).slice(2);
@@ -32,6 +29,7 @@ let searching = false;
 let enteringRoom = false;
 let busy = false;
 let autoStartedRoomId = null;
+let connectingRoomId = null;
 
 let roomListener = null;
 let chatListener = null;
@@ -95,10 +93,6 @@ function stopQueueListener() {
   if (heartbeat) clearInterval(heartbeat);
   heartbeat = null;
 }
-
-/* =========================================
-   STYLES
-   ========================================= */
 
 function addStyles() {
   if ($("rocketOnlineStyles")) return;
@@ -304,10 +298,6 @@ function addStyles() {
   document.head.appendChild(style);
 }
 
-/* =========================================
-   CREATE PANEL
-   ========================================= */
-
 function createPanel() {
   if ($("rocketOnlinePanel")) return;
 
@@ -325,13 +315,8 @@ function createPanel() {
     </div>
 
     <div id="onlineHome">
-
-      <input
-        id="onlinePlayerName"
-        maxlength="18"
-        placeholder="Enter your player name"
-        value="Player"
-      >
+      <input id="onlinePlayerName" maxlength="18"
+        placeholder="Enter your player name" value="Player">
 
       <button id="onlineQuickMatch" class="onlinePrimary">
         ⚡ QUICK MATCH
@@ -351,11 +336,8 @@ function createPanel() {
         OR JOIN A FRIEND
       </div>
 
-      <input
-        id="onlineJoinCode"
-        maxlength="6"
-        placeholder="ENTER ROOM CODE"
-      >
+      <input id="onlineJoinCode" maxlength="6"
+        placeholder="ENTER ROOM CODE">
 
       <button id="onlineJoinRoom" class="onlinePrimary">
         JOIN ROOM
@@ -371,7 +353,6 @@ function createPanel() {
     </div>
 
     <div id="onlineRoom" style="display:none">
-
       <div style="text-align:center;font-size:13px;color:#b9c9df">
         YOUR ROOM CODE
       </div>
@@ -383,32 +364,18 @@ function createPanel() {
       </div>
 
       <div class="onlineButtonRow">
-        <button id="onlineCopy" class="onlineSecondary">
-          COPY ROOM CODE
-        </button>
-
-        <button id="onlineStart" class="onlineGreen">
-          START MATCH
-        </button>
-
-        <button id="onlineLeave" class="onlineRed">
-          LEAVE ROOM
-        </button>
+        <button id="onlineCopy" class="onlineSecondary">COPY ROOM CODE</button>
+        <button id="onlineStart" class="onlineGreen">START MATCH</button>
+        <button id="onlineLeave" class="onlineRed">LEAVE ROOM</button>
       </div>
 
-      <div style="margin-top:18px;font-weight:bold">
-        ROOM CHAT
-      </div>
-
+      <div style="margin-top:18px;font-weight:bold">ROOM CHAT</div>
       <div id="onlineChatMessages"></div>
 
       <div class="onlineButtonRow">
         <input id="onlineChatInput" placeholder="Type a message..." maxlength="180">
-        <button id="onlineSend" class="onlineSecondary">
-          SEND
-        </button>
+        <button id="onlineSend" class="onlineSecondary">SEND</button>
       </div>
-
     </div>
   `;
 
@@ -458,15 +425,9 @@ function createPanel() {
   });
 
   $("onlineJoinCode").addEventListener("input", event => {
-    event.target.value = event.target.value
-      .toUpperCase()
-      .replace(/[^A-Z0-9]/g, "");
+    event.target.value = event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "");
   });
 }
-
-/* =========================================
-   OPEN ROOM
-   ========================================= */
 
 async function openRoom(roomId, roomData) {
   if (!roomId || !roomData) {
@@ -478,11 +439,7 @@ async function openRoom(roomId, roomData) {
   isHost = roomData.host === clientId;
   autoStartedRoomId = null;
 
-  const playerRef = ref(
-    database,
-    `rooms/${roomId}/players/${clientId}`
-  );
-
+  const playerRef = ref(database, `rooms/${roomId}/players/${clientId}`);
   await onDisconnect(playerRef).remove();
 
   showRoom();
@@ -490,10 +447,6 @@ async function openRoom(roomId, roomData) {
 
   status("Connected to room!");
 }
-
-/* =========================================
-   WATCH ROOM
-   ========================================= */
 
 function watchRoom() {
   stopRoomListeners();
@@ -532,12 +485,9 @@ function watchRoom() {
     const startButton = $("onlineStart");
 
     startButton.disabled =
-      !isHost ||
-      entries.length !== 2 ||
-      room.status === "playing";
+      !isHost || entries.length !== 2 || room.status === "playing";
 
-    startButton.textContent =
-      isHost ? "START MATCH" : "WAITING FOR HOST";
+    startButton.textContent = isHost ? "START MATCH" : "WAITING FOR HOST";
 
     if (room.status === "playing") {
       status("MATCH FOUND! Starting the online game...");
@@ -545,15 +495,14 @@ function watchRoom() {
       if (autoStartedRoomId !== currentRoomId) {
         autoStartedRoomId = currentRoomId;
 
-        // IMPORTANT:
-        // Dispatch the event handled by src/main.js.
-        // Do NOT click the normal offline Play button here.
         window.dispatchEvent(
           new CustomEvent("rocket-online-start", {
             detail: {
               roomId: currentRoomId,
               roomCode: room.code,
               players,
+              playerId: clientId,
+              isHost: room.host === clientId,
               startedAt: room.startedAt || Date.now()
             }
           })
@@ -566,10 +515,7 @@ function watchRoom() {
     }
   });
 
-  const chatRef = ref(
-    database,
-    `rooms/${currentRoomId}/messages`
-  );
+  const chatRef = ref(database, `rooms/${currentRoomId}/messages`);
 
   chatListener = onValue(chatRef, snapshot => {
     const messages = snapshot.val() || {};
@@ -598,9 +544,7 @@ function watchRoom() {
   });
 }
 
-/* =========================================
-   QUICK MATCH QUEUE
-   ========================================= */
+/* QUICK MATCH */
 
 async function quickMatch() {
   if (busy || searching || currentRoomId) return;
@@ -636,11 +580,8 @@ async function quickMatch() {
     ticketListener = onValue(ticketRef, async snapshot => {
       const entry = snapshot.val();
 
-      if (
-        !entry ||
-        entry.status !== "paired" ||
-        enteringRoom
-      ) return;
+      if (!entry || entry.status !== "paired") return;
+      if (enteringRoom || currentRoomId) return;
 
       enteringRoom = true;
 
@@ -714,14 +655,12 @@ async function quickMatch() {
         status: "waiting",
         quickMatch: true,
         createdAt: now,
-
         players: {
           [hostId]: {
             name: other.name || "Player 1",
             uid: other.uid || "",
             joinedAt: other.createdAt || now
           },
-
           [clientId]: {
             name: mine.name || "Player 2",
             uid,
@@ -739,15 +678,8 @@ async function quickMatch() {
         roomData
       };
 
-      queue[otherTicketId] = {
-        ...other,
-        ...pairing
-      };
-
-      queue[currentTicketId] = {
-        ...mine,
-        ...pairing
-      };
+      queue[otherTicketId] = { ...other, ...pairing };
+      queue[currentTicketId] = { ...mine, ...pairing };
 
       return queue;
     });
@@ -759,7 +691,10 @@ async function quickMatch() {
     const myEntry = result.snapshot.val()?.[currentTicketId];
 
     if (myEntry?.status === "paired") {
-      await connectToPair(myEntry);
+      if (!enteringRoom && !currentRoomId) {
+        enteringRoom = true;
+        await connectToPair(myEntry);
+      }
     } else {
       status("Searching for an opponent... Keep this tab open!");
     }
@@ -773,71 +708,73 @@ async function quickMatch() {
   }
 }
 
-/* =========================================
-   CONNECT BOTH PLAYERS TO ONE ROOM
-   ========================================= */
-
 async function connectToPair(entry) {
   if (!entry.roomId || !entry.roomData) {
     throw new Error("The match assignment is incomplete.");
   }
 
-  status("Opponent found! Connecting...");
+  if (currentRoomId === entry.roomId) return;
+  if (connectingRoomId === entry.roomId) return;
 
-  const roomRef = ref(database, `rooms/${entry.roomId}`);
+  connectingRoomId = entry.roomId;
 
-  const result = await runTransaction(roomRef, existingRoom => {
-    return existingRoom || entry.roomData;
-  });
+  try {
+    status("Opponent found! Connecting...");
 
-  if (!result.snapshot.exists()) {
-    throw new Error("The matched room could not be created.");
-  }
+    const roomRef = ref(database, `rooms/${entry.roomId}`);
 
-  let room = result.snapshot.val();
-
-  if (!room.players?.[clientId]) {
-    throw new Error("Your player is missing from the matched room.");
-  }
-
-  if (room.quickMatch && room.status === "waiting") {
-    const startResult = await runTransaction(roomRef, latestRoom => {
-      if (!latestRoom) return;
-
-      if (
-        latestRoom.status === "waiting" &&
-        latestRoom.quickMatch &&
-        Object.keys(latestRoom.players || {}).length === 2
-      ) {
-        latestRoom.status = "playing";
-        latestRoom.startedAt = Date.now();
-      }
-
-      return latestRoom;
+    const result = await runTransaction(roomRef, existingRoom => {
+      return existingRoom || entry.roomData;
     });
 
-    if (startResult.snapshot.exists()) {
-      room = startResult.snapshot.val();
+    if (!result.snapshot.exists()) {
+      throw new Error("The matched room could not be created.");
     }
+
+    let room = result.snapshot.val();
+
+    if (!room.players?.[clientId]) {
+      throw new Error("Your player is missing from the matched room.");
+    }
+
+    if (room.quickMatch && room.status === "waiting") {
+      const startResult = await runTransaction(roomRef, latestRoom => {
+        if (!latestRoom) return;
+
+        if (
+          latestRoom.status === "waiting" &&
+          latestRoom.quickMatch &&
+          Object.keys(latestRoom.players || {}).length === 2
+        ) {
+          latestRoom.status = "playing";
+          latestRoom.startedAt = Date.now();
+        }
+
+        return latestRoom;
+      });
+
+      if (startResult.snapshot.exists()) {
+        room = startResult.snapshot.val();
+      }
+    }
+
+    stopQueue();
+
+    await openRoom(entry.roomId, room);
+
+    if (currentTicketId) {
+      await remove(
+        ref(database, `matchmaking/queue/${currentTicketId}`)
+      ).catch(() => {});
+    }
+
+    currentTicketId = null;
+    status("MATCH FOUND! You're connected!");
+
+  } finally {
+    connectingRoomId = null;
   }
-
-  stopQueue();
-
-  await openRoom(entry.roomId, room);
-
-  if (currentTicketId) {
-    await remove(
-      ref(database, `matchmaking/queue/${currentTicketId}`)
-    ).catch(() => {});
-  }
-
-  currentTicketId = null;
-  status("MATCH FOUND! You're connected!");
 }
-
-/* =========================================
-   CANCEL SEARCH
-   ========================================= */
 
 async function cancelSearch() {
   stopQueue();
@@ -861,12 +798,12 @@ async function cancelSearch() {
 function stopQueue() {
   searching = false;
   stopQueueListener();
-  $("onlineCancelSearch").style.display = "none";
+
+  const cancelButton = $("onlineCancelSearch");
+  if (cancelButton) cancelButton.style.display = "none";
 }
 
-/* =========================================
-   PRIVATE ROOM
-   ========================================= */
+/* PRIVATE ROOMS */
 
 async function createPrivateRoom() {
   if (busy || currentRoomId) return;
@@ -889,7 +826,6 @@ async function createPrivateRoom() {
       status: "waiting",
       quickMatch: false,
       createdAt: Date.now(),
-
       players: {
         [clientId]: {
           name: playerName(),
@@ -911,10 +847,6 @@ async function createPrivateRoom() {
     setBusy(false);
   }
 }
-
-/* =========================================
-   JOIN PRIVATE ROOM
-   ========================================= */
 
 async function joinRoom(code) {
   if (busy || currentRoomId) return;
@@ -988,10 +920,6 @@ async function joinRoom(code) {
   }
 }
 
-/* =========================================
-   START MATCH
-   ========================================= */
-
 async function startMatch() {
   if (!currentRoomId || !isHost) return;
 
@@ -1001,7 +929,6 @@ async function startMatch() {
     const result = await runTransaction(roomRef, room => {
       if (!room || room.host !== clientId) return;
       if (room.status !== "waiting") return;
-
       if (Object.keys(room.players || {}).length !== 2) return;
 
       room.status = "playing";
@@ -1022,9 +949,7 @@ async function startMatch() {
   }
 }
 
-/* =========================================
-   CHAT
-   ========================================= */
+/* CHAT */
 
 async function sendChat() {
   if (!currentRoomId) return;
@@ -1051,10 +976,6 @@ async function sendChat() {
   }
 }
 
-/* =========================================
-   COPY ROOM CODE
-   ========================================= */
-
 async function copyRoomCode() {
   if (!currentRoomCode) return;
 
@@ -1065,10 +986,6 @@ async function copyRoomCode() {
     status("Your room code is: " + currentRoomCode);
   }
 }
-
-/* =========================================
-   LEAVE ROOM
-   ========================================= */
 
 async function leaveRoom() {
   stopRoomListeners();
@@ -1112,20 +1029,10 @@ async function leaveRoom() {
   setBusy(false);
   status("You left the room.");
 
-  // Tell the game to end its local online session.
-  window.dispatchEvent(
-    new CustomEvent("rocket-online-leave")
-  );
+  window.dispatchEvent(new CustomEvent("rocket-online-leave"));
 }
 
-/* =========================================
-   INITIALIZE
-   ========================================= */
-
-// IMPORTANT:
-// There is intentionally NO listener here that clicks playBtn.
-// src/main.js listens for rocket-online-start and starts the
-// authoritative online game itself.
+/* INITIALIZE */
 
 async function initialize() {
   try {
