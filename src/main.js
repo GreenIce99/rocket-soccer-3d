@@ -365,6 +365,7 @@ function createCar(color) {
   root.userData = {
     wheels,
     flame,
+    paintMaterial: paint,
     speed: 0,
     verticalSpeed: 0,
     grounded: true,
@@ -389,24 +390,15 @@ rival.userData.yaw = Math.PI / 2;
 player.rotation.y = player.userData.yaw;
 rival.rotation.y = rival.userData.yaw;
 
+// FIXED TEAM COLORS: only recolor the actual car body.
 function setCarTeamColor(car, color) {
-  car.traverse((obj) => {
-    if (obj.isMesh && obj.material && obj.material.color) {
-      if (
-        obj.material.metalness > 0.3 &&
-        obj.material.color.getHex() !== 0x9aadc2
-      ) {
-        obj.material.color.set(color);
-      }
-    }
-  });
-
-  car.userData.underglow.color.set(color);
+  car.userData.paintMaterial.color.setHex(color);
+  car.userData.underglow.color.setHex(color);
 }
 
 function setPlayerColor(color) {
   if (onlineSession) return;
-  setCarTeamColor(player, color);
+  setCarTeamColor(player, Number(color));
 }
 
 function enforceOnlineTeamColors() {
@@ -635,6 +627,8 @@ async function sendOnlineInput() {
 }
 
 async function beginOnlineSession(detail) {
+  if (onlineStartPending || onlineSession) return;
+
   onlineStartPending = true;
 
   try {
@@ -687,7 +681,6 @@ async function beginOnlineSession(detail) {
 
     controlledCar = isHost ? player : rival;
 
-    // Never let both online players use the same team color.
     enforceOnlineTeamColors();
 
     onlineLastSnapshot = 0;
@@ -703,13 +696,8 @@ async function beginOnlineSession(detail) {
       sentAt: 0
     };
 
-    if (onlineInputUnsubscribe) {
-      onlineInputUnsubscribe();
-    }
-
-    if (onlineStateUnsubscribe) {
-      onlineStateUnsubscribe();
-    }
+    if (onlineInputUnsubscribe) onlineInputUnsubscribe();
+    if (onlineStateUnsubscribe) onlineStateUnsubscribe();
 
     if (isHost) {
       onlineInputUnsubscribe = onValue(
@@ -1160,9 +1148,14 @@ function startMatch() {
   resetPositions();
 
   if (onlineSession) {
-    // Host is always BLUE; joining player is always ORANGE.
     enforceOnlineTeamColors();
     controlledCar = onlineSession.isHost ? player : rival;
+
+    // Hide the online waiting/lobby panel once the match begins.
+    const onlinePanel = $('rocketOnlinePanel');
+    if (onlinePanel) {
+      onlinePanel.style.display = 'none';
+    }
   } else {
     controlledCar = player;
   }
@@ -1291,7 +1284,7 @@ function updateCar(car, isPlayer, dt, inputOverride = null) {
     boosting = !!input.boosting && data.boost > 0;
 
   } else {
-    // This is ONLY used for offline AI matches.
+    // Offline opponent AI.
     const targetX = ballGroup.position.x + 3.5;
     const targetZ = ballGroup.position.z * 0.85;
 
@@ -1652,7 +1645,6 @@ function animate() {
 
   if (gameState === 'playing') {
     if (countdown > 0) {
-      // The host owns the countdown in online matches.
       if (!onlineSession || onlineSession.isHost) {
         countdown -= dt;
       }
@@ -1668,7 +1660,6 @@ function animate() {
       }
 
     } else {
-      // The host owns the clock in online matches.
       if (!onlineSession || onlineSession.isHost) {
         timeLeft -= dt;
       }
@@ -1717,7 +1708,6 @@ function animate() {
     updateCamera(dt);
   }
 
-  // Only the host publishes the authoritative match state.
   if (
     onlineSession?.isHost &&
     (
