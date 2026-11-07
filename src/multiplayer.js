@@ -1,5 +1,4 @@
-
-import { auth, database, playerReady } from './firebase.js';
+import { auth, database, playerReady } from "./firebase.js";
 
 import {
   ref,
@@ -7,20 +6,96 @@ import {
   set,
   get,
   update,
+  remove,
   query,
   orderByChild,
   equalTo,
   runTransaction,
   onValue,
-  onDisconnect,
-  remove
-} from 'firebase/database';
+  onDisconnect
+} from "firebase/database";
 
-// --------------------------------------------------
-// STYLES
-// --------------------------------------------------
+/* ==========================================
+   ROCKET SOCCER - MULTIPLAYER
+   ========================================== */
 
-const style = document.createElement('style');
+let currentRoomId = null;
+let currentRoomCode = null;
+let currentOwnRoomId = null;
+let currentTicketId = null;
+
+let roomListener = null;
+let chatListener = null;
+let ticketListener = null;
+
+let isHost = false;
+let busy = false;
+let joiningMatchedRoom = false;
+
+const $ = id => document.getElementById(id);
+
+function status(message) {
+  const element = $("onlineStatus");
+  if (element) element.textContent = message;
+}
+
+function playerName() {
+  return $("onlineName")?.value.trim().slice(0, 16) || "Player";
+}
+
+function makeCode() {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let code = "";
+
+  for (let i = 0; i < 6; i++) {
+    code += chars[Math.floor(Math.random() * chars.length)];
+  }
+
+  return code;
+}
+
+function getPlayerCount(players) {
+  return Object.keys(players || {}).length;
+}
+
+function setBusy(value) {
+  busy = value;
+
+  $("quickMatchBtn").disabled = value;
+  $("createRoomBtn").disabled = value;
+  $("joinRoomBtn").disabled = value;
+
+  $("quickMatchBtn").textContent =
+    value ? "PLEASE WAIT..." : "QUICK MATCH";
+}
+
+function showRoom() {
+  $("onlineHome").style.display = "none";
+  $("onlineRoom").style.display = "block";
+  $("roomCodeDisplay").textContent = currentRoomCode || "------";
+}
+
+function showHome() {
+  $("onlineHome").style.display = "block";
+  $("onlineRoom").style.display = "none";
+  $("onlineChat").innerHTML = "";
+}
+
+function stopListeners() {
+  if (roomListener) roomListener();
+  if (chatListener) chatListener();
+  if (ticketListener) ticketListener();
+
+  roomListener = null;
+  chatListener = null;
+  ticketListener = null;
+}
+
+/* ==========================================
+   STYLES AND PANEL
+   ========================================== */
+
+const style = document.createElement("style");
 
 style.textContent = `
 #onlinePanel {
@@ -45,7 +120,7 @@ style.textContent = `
   max-height:90vh;
   overflow:auto;
   box-sizing:border-box;
-  padding:30px;
+  padding:26px;
   border:1px solid #248dff;
   border-radius:16px;
   background:linear-gradient(145deg,#10233d,#07101e);
@@ -54,7 +129,7 @@ style.textContent = `
 
 .online-card h2 {
   margin:0 0 8px;
-  font-size:28px;
+  font-size:27px;
   letter-spacing:2px;
 }
 
@@ -72,7 +147,7 @@ style.textContent = `
   background:#071629;
   border:1px solid #365777;
   border-radius:7px;
-  font-size:17px;
+  font-size:16px;
 }
 
 .online-btn {
@@ -137,6 +212,7 @@ style.textContent = `
   border-radius:7px;
   margin:10px 0;
   font-size:13px;
+  overflow-wrap:anywhere;
 }
 
 .online-chat-row {
@@ -157,13 +233,8 @@ style.textContent = `
 
 document.head.appendChild(style);
 
-// --------------------------------------------------
-// MULTIPLAYER PANEL
-// --------------------------------------------------
-
-const panel = document.createElement('div');
-
-panel.id = 'onlinePanel';
+const panel = document.createElement("div");
+panel.id = "onlinePanel";
 
 panel.innerHTML = `
   <div class="online-card">
@@ -213,10 +284,7 @@ panel.innerHTML = `
 
       <div id="roomCodeDisplay">------</div>
 
-      <button
-        class="online-btn secondary"
-        id="copyCodeBtn"
-      >
+      <button class="online-btn secondary" id="copyCodeBtn">
         COPY ROOM CODE
       </button>
 
@@ -227,7 +295,6 @@ panel.innerHTML = `
       <div id="onlineChat"></div>
 
       <div class="online-chat-row">
-
         <input
           id="onlineChatInput"
           class="online-input"
@@ -242,20 +309,13 @@ panel.innerHTML = `
         >
           SEND
         </button>
-
       </div>
 
-      <button
-        class="online-btn"
-        id="startOnlineBtn"
-      >
+      <button class="online-btn" id="startOnlineBtn">
         START MATCH
       </button>
 
-      <button
-        class="online-btn secondary"
-        id="leaveRoomBtn"
-      >
+      <button class="online-btn secondary" id="leaveRoomBtn">
         LEAVE ROOM
       </button>
 
@@ -275,100 +335,17 @@ panel.innerHTML = `
 
 document.body.appendChild(panel);
 
-const $ = id => document.getElementById(id);
-
-// --------------------------------------------------
-// STATE
-// --------------------------------------------------
-
-let currentRoomId = null;
-let currentRoomCode = null;
-
-let currentTicketId = null;
-let currentOwnRoomId = null;
-
-let roomListener = null;
-let chatListener = null;
-let ticketListener = null;
-
-let isHost = false;
-let busy = false;
-let joiningMatchedRoom = false;
-
-// --------------------------------------------------
-// HELPERS
-// --------------------------------------------------
-
-function status(message) {
-  $('onlineStatus').textContent = message;
-}
-
 function openPanel() {
-  panel.classList.add('open');
+  panel.classList.add("open");
 }
 
 function closePanel() {
-  panel.classList.remove('open');
+  panel.classList.remove("open");
 }
 
-function playerName() {
-  return $('onlineName').value.trim().slice(0, 16) || 'Player';
-}
-
-function makeCode() {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-
-  let code = '';
-
-  for (let i = 0; i < 6; i++) {
-    code += chars[Math.floor(Math.random() * chars.length)];
-  }
-
-  return code;
-}
-
-function setBusy(value) {
-  busy = value;
-
-  $('quickMatchBtn').disabled = value;
-  $('createRoomBtn').disabled = value;
-  $('joinRoomBtn').disabled = value;
-
-  $('quickMatchBtn').textContent =
-    value ? 'PLEASE WAIT...' : 'QUICK MATCH';
-}
-
-function showRoom() {
-  $('onlineHome').style.display = 'none';
-  $('onlineRoom').style.display = 'block';
-
-  $('roomCodeDisplay').textContent =
-    currentRoomCode || '------';
-}
-
-function showHome() {
-  $('onlineHome').style.display = 'block';
-  $('onlineRoom').style.display = 'none';
-  $('onlineChat').innerHTML = '';
-}
-
-function stopListeners() {
-  if (roomListener) roomListener();
-  if (chatListener) chatListener();
-  if (ticketListener) ticketListener();
-
-  roomListener = null;
-  chatListener = null;
-  ticketListener = null;
-}
-
-function getPlayerCount(players) {
-  return Object.keys(players || {}).length;
-}
-
-// --------------------------------------------------
-// ROOM LISTENERS
-// --------------------------------------------------
+/* ==========================================
+   ROOM LISTENERS
+   ========================================== */
 
 function watchRoom() {
   if (!currentRoomId) return;
@@ -378,10 +355,7 @@ function watchRoom() {
 
   const watchedRoomId = currentRoomId;
 
-  const roomRef = ref(
-    database,
-    `rooms/${watchedRoomId}`
-  );
+  const roomRef = ref(database, `rooms/${watchedRoomId}`);
 
   roomListener = onValue(
     roomRef,
@@ -389,32 +363,31 @@ function watchRoom() {
       if (currentRoomId !== watchedRoomId) return;
 
       if (!snapshot.exists()) {
-        status('This room no longer exists.');
+        status("This room no longer exists.");
         return;
       }
 
       const room = snapshot.val();
       const players = room.players || {};
-
       const names = Object.values(players).map(
-        player => player.name || 'Player'
+        player => player.name || "Player"
       );
 
-      $('onlinePlayers').textContent =
+      $("onlinePlayers").textContent =
         names.length >= 2
           ? `${names[0]} vs ${names[1]} — BOTH PLAYERS CONNECTED!`
-          : `${names[0] || 'Player'} — waiting for an opponent...`;
+          : `${names[0] || "Player"} — waiting for an opponent...`;
 
-      $('startOnlineBtn').disabled =
+      $("startOnlineBtn").disabled =
         !isHost ||
         names.length < 2 ||
-        room.status === 'playing';
+        room.status === "playing";
 
-      if (room.status === 'playing') {
-        status('Match started!');
+      if (room.status === "playing") {
+        status("Match started!");
 
         window.dispatchEvent(
-          new CustomEvent('rocket-online-start', {
+          new CustomEvent("rocket-online-start", {
             detail: {
               roomId: watchedRoomId,
               roomCode: currentRoomCode,
@@ -423,11 +396,11 @@ function watchRoom() {
           })
         );
       } else if (names.length >= 2) {
-        status('Opponent connected! Host can start the match.');
+        status("Opponent connected! Host can start the match.");
       } else if (room.quickMatch) {
-        status('Searching for an opponent...');
+        status("Searching for an opponent...");
       } else {
-        status('Room created. Share your code!');
+        status("Room created. Share your code!");
       }
     },
     error => {
@@ -448,23 +421,21 @@ function watchRoom() {
       const messages = snapshot.val() || {};
       const entries = Object.values(messages).slice(-35);
 
-      $('onlineChat').innerHTML = '';
+      $("onlineChat").innerHTML = "";
 
       for (const message of entries) {
-        const line = document.createElement('div');
-        const name = document.createElement('b');
-        const content = document.createElement('span');
+        const line = document.createElement("div");
+        const name = document.createElement("b");
+        const content = document.createElement("span");
 
-        name.textContent = `${message.name || 'Player'}: `;
-        content.textContent = message.text || '';
+        name.textContent = `${message.name || "Player"}: `;
+        content.textContent = message.text || "";
 
         line.append(name, content);
-
-        $('onlineChat').appendChild(line);
+        $("onlineChat").appendChild(line);
       }
 
-      $('onlineChat').scrollTop =
-        $('onlineChat').scrollHeight;
+      $("onlineChat").scrollTop = $("onlineChat").scrollHeight;
     },
     error => {
       status(`Chat error: ${error.message}`);
@@ -472,27 +443,25 @@ function watchRoom() {
   );
 }
 
-// --------------------------------------------------
-// CREATE ROOM
-// --------------------------------------------------
+/* ==========================================
+   CREATE ROOM
+   ========================================== */
 
 async function createRoom(quickMatch = false) {
   const uid = auth.currentUser?.uid;
 
   if (!uid) {
-    throw new Error('Firebase sign-in is not ready.');
+    throw new Error("Firebase sign-in is not ready.");
   }
 
   const code = makeCode();
-
-  const roomRef = push(ref(database, 'rooms'));
-
+  const roomRef = push(ref(database, "rooms"));
   const roomId = roomRef.key;
 
   const roomData = {
     code,
     host: uid,
-    status: 'waiting',
+    status: "waiting",
     quickMatch,
     createdAt: Date.now(),
 
@@ -513,50 +482,42 @@ async function createRoom(quickMatch = false) {
   currentRoomId = roomId;
   currentOwnRoomId = roomId;
   currentRoomCode = code;
-
   isHost = true;
 
   showRoom();
   watchRoom();
 
-  return {
-    roomId,
-    code
-  };
+  return { roomId, code };
 }
 
-// --------------------------------------------------
-// MATCHMAKING QUEUE
-// --------------------------------------------------
+/* ==========================================
+   MATCHMAKING QUEUE - FIXED
+   ========================================== */
 
 async function joinMatchmakingQueue() {
   const uid = auth.currentUser?.uid;
 
   if (!uid) {
-    throw new Error('You are not signed in.');
+    throw new Error("You are not signed in.");
   }
 
-  // Every player gets their own waiting ticket.
-  const queueRef = ref(
-    database,
-    'matchmaking/queue'
-  );
-
+  const queueRef = ref(database, "matchmaking/queue");
   const ticketRef = push(queueRef);
 
   currentTicketId = ticketRef.key;
 
+  // Keep this ticket available even if the first transaction
+  // snapshot does not include the earlier set() operation.
   const ticket = {
     uid,
     name: playerName(),
-    status: 'waiting',
+    status: "waiting",
     roomId: currentOwnRoomId,
     roomCode: currentRoomCode,
     createdAt: Date.now()
   };
 
   await set(ticketRef, ticket);
-
   await onDisconnect(ticketRef).remove();
 
   // Listen for another player matching with us.
@@ -567,11 +528,12 @@ async function joinMatchmakingQueue() {
 
       const data = snapshot.val();
 
-      if (data.status !== 'paired') return;
+      if (data.status !== "paired") return;
 
+      // The host already owns the room. It just waits
+      // for the other player to join it.
       if (data.hostUid === uid) {
-        status('Opponent found! Waiting for them to connect...');
-
+        status("Opponent found! Waiting for them to connect...");
         return;
       }
 
@@ -579,10 +541,7 @@ async function joinMatchmakingQueue() {
         joiningMatchedRoom = true;
 
         try {
-          await enterMatchedRoom(
-            data.roomId,
-            data.roomCode
-          );
+          await enterMatchedRoom(data.roomId, data.roomCode);
         } catch (error) {
           status(`Could not join matched room: ${error.message}`);
           console.error(error);
@@ -596,31 +555,35 @@ async function joinMatchmakingQueue() {
     }
   );
 
-  // Atomically pair this player with one waiting player.
+  // ATOMIC MATCHMAKING TRANSACTION
   const result = await runTransaction(
     queueRef,
     queue => {
       if (!queue) queue = {};
 
-      const mine = queue[currentTicketId];
+      // FIX: Do not abort just because the ticket is missing
+      // from the transaction's initial snapshot.
+      const mine = queue[currentTicketId] || ticket;
 
-      if (!mine || mine.uid !== uid) return;
+      // Make sure our ticket is actually part of the queue.
+      queue[currentTicketId] = mine;
 
-      if (mine.status !== 'waiting') {
+      if (mine.status !== "waiting") {
         return queue;
       }
 
       const now = Date.now();
 
-      // Remove expired waiting tickets.
+      // Expire old tickets.
       for (const key of Object.keys(queue)) {
         const item = queue[key];
 
         if (
-          item.status === 'waiting' &&
+          item &&
+          item.status === "waiting" &&
           now - (item.createdAt || 0) > 120000
         ) {
-          queue[key].status = 'expired';
+          queue[key].status = "expired";
         }
       }
 
@@ -628,8 +591,9 @@ async function joinMatchmakingQueue() {
       const candidates = Object.entries(queue)
         .filter(([key, item]) =>
           key !== currentTicketId &&
+          item &&
           item.uid !== uid &&
-          item.status === 'waiting' &&
+          item.status === "waiting" &&
           item.roomId &&
           now - (item.createdAt || 0) <= 120000
         )
@@ -638,15 +602,15 @@ async function joinMatchmakingQueue() {
           (b[1].createdAt || 0)
         );
 
+      // Nobody available yet. Stay in the queue.
       if (candidates.length === 0) {
         return queue;
       }
 
-      const [opponentTicketId, opponent] =
-        candidates[0];
+      const [opponentTicketId, opponent] = candidates[0];
 
       const pairData = {
-        status: 'paired',
+        status: "paired",
         roomId: opponent.roomId,
         roomCode: opponent.roomCode,
         hostUid: opponent.uid,
@@ -654,6 +618,7 @@ async function joinMatchmakingQueue() {
         pairedAt: now
       };
 
+      // Update both tickets in the SAME transaction.
       queue[opponentTicketId] = {
         ...opponent,
         ...pairData,
@@ -673,44 +638,42 @@ async function joinMatchmakingQueue() {
   );
 
   if (!result.committed) {
-    throw new Error('Could not enter matchmaking queue.');
+    throw new Error(
+      "Firebase did not save the matchmaking ticket. Check the database permissions."
+    );
   }
 
   const updatedTicket =
     result.snapshot.val()?.[currentTicketId];
 
-  if (updatedTicket?.status === 'waiting') {
-    status('Searching for an opponent... Your room is ready!');
+  if (updatedTicket?.status === "waiting") {
+    status("Searching for an opponent... Your room is ready!");
   }
 }
 
-// --------------------------------------------------
-// ENTER A MATCHED ROOM
-// --------------------------------------------------
+/* ==========================================
+   ENTER MATCHED ROOM
+   ========================================== */
 
 async function enterMatchedRoom(roomId, code) {
   if (!roomId || !code) {
-    throw new Error('The matchmaking room information is missing.');
+    throw new Error("The matchmaking room information is missing.");
   }
 
   const uid = auth.currentUser?.uid;
 
   if (!uid) {
-    throw new Error('Firebase sign-in is not ready.');
+    throw new Error("Firebase sign-in is not ready.");
   }
 
-  status('Opponent found! Connecting...');
+  status("Opponent found! Connecting...");
 
-  const roomRef = ref(
-    database,
-    `rooms/${roomId}`
-  );
+  const roomRef = ref(database, `rooms/${roomId}`);
 
-  // Atomically add the second player to the host's room.
   const result = await runTransaction(
     roomRef,
     room => {
-      if (!room || room.status !== 'waiting') return;
+      if (!room || room.status !== "waiting") return;
 
       room.players = room.players || {};
 
@@ -728,23 +691,17 @@ async function enterMatchedRoom(roomId, code) {
   );
 
   if (!result.committed) {
-    throw new Error('The opponent room is no longer available.');
+    throw new Error("The opponent room is no longer available.");
   }
 
-  // Remove our temporary waiting room.
-  if (
-    currentOwnRoomId &&
-    currentOwnRoomId !== roomId
-  ) {
-    await remove(
-      ref(database, `rooms/${currentOwnRoomId}`)
-    );
+  // Delete the temporary room we created while searching.
+  if (currentOwnRoomId && currentOwnRoomId !== roomId) {
+    await remove(ref(database, `rooms/${currentOwnRoomId}`));
   }
 
   currentRoomId = roomId;
   currentRoomCode = code;
   currentOwnRoomId = null;
-
   isHost = false;
 
   await onDisconnect(
@@ -754,65 +711,58 @@ async function enterMatchedRoom(roomId, code) {
   showRoom();
   watchRoom();
 
-  status('MATCH FOUND! You are connected!');
+  status("MATCH FOUND! You are connected!");
 }
 
-// --------------------------------------------------
-// QUICK MATCH
-// --------------------------------------------------
+/* ==========================================
+   QUICK MATCH
+   ========================================== */
 
 async function quickMatch() {
   if (busy) return;
 
   setBusy(true);
-
-  status('Connecting to matchmaking...');
+  status("Connecting to matchmaking...");
 
   try {
     await playerReady;
 
-    // If already in a room, leave it first.
     if (currentRoomId) {
       await leaveRoom();
     }
 
-    // Create a temporary room for this player.
-    // The queue will pair another player with it.
-    status('Preparing your room...');
+    status("Preparing your room...");
 
     await createRoom(true);
 
-    // Create a queue ticket and search atomically.
-    status('Searching for an opponent...');
+    status("Searching for an opponent...");
 
     await joinMatchmakingQueue();
 
   } catch (error) {
     status(`Quick Match error: ${error.message}`);
-
-    console.error('Quick Match error:', error);
+    console.error("Quick Match error:", error);
   } finally {
     setBusy(false);
   }
 }
 
-// --------------------------------------------------
-// PRIVATE ROOM JOINING
-// --------------------------------------------------
+/* ==========================================
+   JOIN PRIVATE ROOM
+   ========================================== */
 
 async function joinRoom(code) {
   if (busy) return;
 
-  code = code.toUpperCase().trim();
+  code = String(code || "").toUpperCase().trim();
 
   if (code.length !== 6) {
-    status('Enter a valid 6-character room code.');
+    status("Enter a valid 6-character room code.");
     return;
   }
 
   setBusy(true);
-
-  status('Looking for room...');
+  status("Looking for room...");
 
   try {
     await playerReady;
@@ -820,20 +770,19 @@ async function joinRoom(code) {
     const uid = auth.currentUser?.uid;
 
     if (!uid) {
-      throw new Error('Firebase sign-in is not ready.');
+      throw new Error("Firebase sign-in is not ready.");
     }
 
     const roomsQuery = query(
-      ref(database, 'rooms'),
-      orderByChild('code'),
+      ref(database, "rooms"),
+      orderByChild("code"),
       equalTo(code)
     );
 
     const snapshot = await get(roomsQuery);
 
     if (!snapshot.exists()) {
-      status('Room not found. Check the code.');
-      return;
+      throw new Error("Room not found. Check the code.");
     }
 
     let foundId = null;
@@ -843,19 +792,15 @@ async function joinRoom(code) {
     });
 
     if (!foundId) {
-      status('Room not found.');
-      return;
+      throw new Error("Room not found.");
     }
 
-    const roomRef = ref(
-      database,
-      `rooms/${foundId}`
-    );
+    const roomRef = ref(database, `rooms/${foundId}`);
 
     const result = await runTransaction(
       roomRef,
       room => {
-        if (!room || room.status !== 'waiting') return;
+        if (!room || room.status !== "waiting") return;
 
         room.players = room.players || {};
 
@@ -873,14 +818,12 @@ async function joinRoom(code) {
     );
 
     if (!result.committed) {
-      status('That room is full or the match has started.');
-      return;
+      throw new Error("That room is full or the match has started.");
     }
 
     currentRoomId = foundId;
     currentRoomCode = code;
     currentOwnRoomId = null;
-
     isHost = false;
 
     await onDisconnect(
@@ -890,7 +833,7 @@ async function joinRoom(code) {
     showRoom();
     watchRoom();
 
-    status('Joined room successfully!');
+    status("Joined room successfully!");
 
   } catch (error) {
     status(`Could not join room: ${error.message}`);
@@ -900,19 +843,18 @@ async function joinRoom(code) {
   }
 }
 
-// --------------------------------------------------
-// CHAT
-// --------------------------------------------------
+/* ==========================================
+   CHAT
+   ========================================== */
 
 async function sendChat() {
   if (!currentRoomId) return;
 
-  const messageText =
-    $('onlineChatInput').value.trim();
+  const messageText = $("onlineChatInput").value.trim();
 
   if (!messageText) return;
 
-  $('onlineChatInput').value = '';
+  $("onlineChatInput").value = "";
 
   try {
     await push(
@@ -924,33 +866,29 @@ async function sendChat() {
         sentAt: Date.now()
       }
     );
-
   } catch (error) {
     status(`Message failed: ${error.message}`);
   }
 }
 
-// --------------------------------------------------
-// START MATCH
-// --------------------------------------------------
+/* ==========================================
+   START MATCH
+   ========================================== */
 
 async function startOnlineMatch() {
   if (!currentRoomId || !isHost) return;
 
   try {
-    const roomRef = ref(
-      database,
-      `rooms/${currentRoomId}`
-    );
+    const roomRef = ref(database, `rooms/${currentRoomId}`);
 
     const result = await runTransaction(
       roomRef,
       room => {
-        if (!room || room.status !== 'waiting') return;
+        if (!room || room.status !== "waiting") return;
 
         if (getPlayerCount(room.players) < 2) return;
 
-        room.status = 'playing';
+        room.status = "playing";
         room.startedAt = Date.now();
 
         return room;
@@ -958,20 +896,20 @@ async function startOnlineMatch() {
     );
 
     if (!result.committed) {
-      status('You need two connected players before starting.');
+      status("You need two connected players before starting.");
       return;
     }
 
-    status('Match started!');
+    status("Match started!");
 
   } catch (error) {
     status(`Could not start match: ${error.message}`);
   }
 }
 
-// --------------------------------------------------
-// LEAVE ROOM AND QUEUE
-// --------------------------------------------------
+/* ==========================================
+   LEAVE ROOM AND QUEUE
+   ========================================== */
 
 async function leaveRoom() {
   stopListeners();
@@ -1004,156 +942,113 @@ async function leaveRoom() {
       );
     } else if (oldRoomId && uid) {
       await remove(
-        ref(database,
-          `rooms/${oldRoomId}/players/${uid}`)
+        ref(database, `rooms/${oldRoomId}/players/${uid}`)
       );
     }
-
   } catch (error) {
-    console.warn('Room cleanup:', error);
+    console.warn("Room cleanup:", error);
   }
 
   showHome();
-
-  status('You left the room.');
+  status("You left the room.");
 }
 
-// --------------------------------------------------
-// COPY ROOM CODE
-// --------------------------------------------------
+/* ==========================================
+   BUTTONS
+   ========================================== */
 
-$('copyCodeBtn').addEventListener('click', async () => {
+$("onlineClose").addEventListener("click", closePanel);
+
+$("quickMatchBtn").addEventListener("click", quickMatch);
+
+$("createRoomBtn").addEventListener("click", async () => {
+  if (busy) return;
+
+  setBusy(true);
+
+  try {
+    await playerReady;
+
+    if (currentRoomId) {
+      await leaveRoom();
+    }
+
+    await createRoom(false);
+
+  } catch (error) {
+    status(`Could not create room: ${error.message}`);
+    console.error(error);
+  } finally {
+    setBusy(false);
+  }
+});
+
+$("joinRoomBtn").addEventListener("click", () => {
+  joinRoom($("joinCodeInput").value);
+});
+
+$("joinCodeInput").addEventListener("input", event => {
+  event.target.value = event.target.value
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "")
+    .slice(0, 6);
+});
+
+$("sendChatBtn").addEventListener("click", sendChat);
+
+$("onlineChatInput").addEventListener("keydown", event => {
+  if (event.key === "Enter") sendChat();
+});
+
+$("startOnlineBtn").addEventListener("click", startOnlineMatch);
+
+$("leaveRoomBtn").addEventListener("click", leaveRoom);
+
+$("copyCodeBtn").addEventListener("click", async () => {
   if (!currentRoomCode) return;
 
   try {
     await navigator.clipboard.writeText(currentRoomCode);
-
-    status('Room code copied!');
-
+    status("Room code copied!");
   } catch (error) {
     status(`Your room code is ${currentRoomCode}`);
   }
 });
 
-// --------------------------------------------------
-// BUTTONS
-// --------------------------------------------------
-
-$('onlineClose').addEventListener(
-  'click',
-  closePanel
-);
-
-$('quickMatchBtn').addEventListener(
-  'click',
-  quickMatch
-);
-
-$('createRoomBtn').addEventListener(
-  'click',
-  async () => {
-    if (busy) return;
-
-    setBusy(true);
-
-    try {
-      await playerReady;
-
-      if (currentRoomId) {
-        await leaveRoom();
-      }
-
-      await createRoom(false);
-
-    } catch (error) {
-      status(`Could not create room: ${error.message}`);
-    } finally {
-      setBusy(false);
-    }
-  }
-);
-
-$('joinRoomBtn').addEventListener(
-  'click',
-  () => joinRoom($('joinCodeInput').value)
-);
-
-$('joinCodeInput').addEventListener(
-  'input',
-  event => {
-    event.target.value = event.target.value
-      .toUpperCase()
-      .replace(/[^A-Z0-9]/g, '')
-      .slice(0, 6);
-  }
-);
-
-$('sendChatBtn').addEventListener(
-  'click',
-  sendChat
-);
-
-$('onlineChatInput').addEventListener(
-  'keydown',
-  event => {
-    if (event.key === 'Enter') sendChat();
-  }
-);
-
-$('startOnlineBtn').addEventListener(
-  'click',
-  startOnlineMatch
-);
-
-$('leaveRoomBtn').addEventListener(
-  'click',
-  leaveRoom
-);
-
-// --------------------------------------------------
-// INITIALIZE
-// --------------------------------------------------
+/* ==========================================
+   INITIALIZE
+   ========================================== */
 
 async function initializeOnline() {
   try {
     await playerReady;
 
-    status('Connected to Firebase!');
+    status("Connected to Firebase!");
 
-    const button = document.createElement('button');
+    const button = document.createElement("button");
 
-    button.className = 'play-button';
-    button.style.marginTop = '12px';
+    button.className = "play-button";
+    button.style.marginTop = "12px";
+    button.innerHTML = "<span>ONLINE MULTIPLAYER</span><b>🌐</b>";
 
-    button.innerHTML =
-      '<span>ONLINE MULTIPLAYER</span><b>🌐</b>';
+    button.addEventListener("click", openPanel);
 
-    button.addEventListener(
-      'click',
-      openPanel
-    );
-
-    const playButton =
-      document.getElementById('playBtn');
+    const playButton = document.getElementById("playBtn");
 
     if (playButton) {
-      playButton.insertAdjacentElement(
-        'afterend',
-        button
-      );
+      playButton.insertAdjacentElement("afterend", button);
     } else {
       document.body.appendChild(button);
     }
 
   } catch (error) {
     status(`Firebase connection failed: ${error.message}`);
-
     console.error(error);
   }
 }
 
 initializeOnline();
 
-window.addEventListener('beforeunload', () => {
+window.addEventListener("beforeunload", () => {
   stopListeners();
 });
